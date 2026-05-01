@@ -5,13 +5,16 @@ export const queryKeys = {
   completedExams: (grade?: string, subject?: string) => ['exams', 'completed', { grade, subject }] as const,
   examQuestions: (examId: string) => ['exam', examId, 'questions'] as const,
   examResult: (examId: string) => ['exam', examId, 'result'] as const,
-  performanceData: (subjectSlug: string) => ['student', 'performance', subjectSlug] as const,
+  performanceData: (subjectSlug: string, timeframe: 'monthly' | 'yearly') => ['student', 'performance', subjectSlug, timeframe] as const,
   subjects: () => ['subjects'] as const,
   grades: () => ['grades'] as const,
 
   // Admin
   adminStudents: (page: number, search?: string) => ['admin', 'students', page, search] as const,
   adminStudentDetail: (studentId: string) => ['admin', 'student', studentId] as const,
+  adminStudentPendingExams: (studentId: string, page: number) => ['admin', 'student', studentId, 'pending', page] as const,
+  adminStudentCompletedExams: (studentId: string, page: number) => ['admin', 'student', studentId, 'completed', page] as const,
+  adminStudentPerformance: (studentId: string, subjectSlug: string) => ['admin', 'student', studentId, 'performance', subjectSlug] as const,
   adminExams: (page: number, grade?: string, subject?: string) => ['admin', 'exams', page, { grade, subject }] as const,
   adminQuestions: (page: number, grade?: string, subject?: string, search?: string, unusedOnly?: boolean) =>
     ['admin', 'questions', page, { grade, subject, search, unusedOnly }] as const,

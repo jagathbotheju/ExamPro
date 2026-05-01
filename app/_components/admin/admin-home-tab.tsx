@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Users, FileText, Database, BarChart2, ChevronRight } from 'lucide-react';
+import { Users, FileText, Database, BarChart2, ChevronRight, BookOpen, Clock } from 'lucide-react';
 import { StatTile } from '@/app/_components/shared/stat-tile';
 import { SubjectBlock } from '@/app/_components/shared/subject-block';
 import { PerformanceChart } from '@/app/_components/shared/performance-chart';
@@ -10,10 +10,12 @@ import { Pagination } from '@/app/_components/shared/pagination';
 import { getStudents } from '@/actions/admin/getStudents';
 import { getAdminExams } from '@/actions/admin/getExams';
 import { getAdminQuestions } from '@/actions/admin/getQuestions';
-import { getCompletedExams } from '@/actions/student/getCompletedExams';
+import { getStudentPendingExams, getStudentCompletedExams } from '@/actions/admin/getStudentDetail';
+import { getStudentPerformanceData } from '@/actions/admin/getStudentPerformanceData';
+import { getSubjects } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
 import { getGrade, getInitials, formatDate } from '@/app/_lib/utils';
-import type { StudentSummary, Exam, ExamSubmission } from '@/app/_lib/types';
+import type { StudentSummary } from '@/app/_lib/types';
 
 export function AdminHomeTab() {
   const [studentPage, setStudentPage] = useState(1);
@@ -22,6 +24,7 @@ export function AdminHomeTab() {
   const [pPage, setPPage] = useState(1);
   const [cPage, setCPage] = useState(1);
   const [tf, setTf] = useState<'monthly' | 'yearly'>('monthly');
+  const [subjectSlug, setSubjectSlug] = useState('math');
 
   const { data: studentsData } = useQuery({
     queryKey: queryKeys.adminStudents(studentPage, search),
@@ -35,9 +38,44 @@ export function AdminHomeTab() {
     queryKey: queryKeys.adminQuestions(1),
     queryFn: () => getAdminQuestions(1),
   });
+  const { data: subjectsData } = useQuery({
+    queryKey: queryKeys.subjects(),
+    queryFn: getSubjects,
+  });
 
   const students = studentsData?.students ?? [];
-  const selectedStudent = selectedId ? students.find(s => s.id === selectedId) ?? students[0] : students[0];
+  const selectedStudent = selectedId
+    ? students.find(s => s.id === selectedId) ?? null
+    : null;
+
+  const activeStudentId = selectedStudent?.id ?? '';
+
+  const { data: pendingData, isLoading: pendingLoading } = useQuery({
+    queryKey: queryKeys.adminStudentPendingExams(activeStudentId, pPage),
+    queryFn: () => getStudentPendingExams(activeStudentId, pPage),
+    enabled: !!activeStudentId,
+  });
+
+  const { data: completedData, isLoading: completedLoading } = useQuery({
+    queryKey: queryKeys.adminStudentCompletedExams(activeStudentId, cPage),
+    queryFn: () => getStudentCompletedExams(activeStudentId, cPage),
+    enabled: !!activeStudentId,
+  });
+
+  const { data: perfData } = useQuery({
+    queryKey: queryKeys.adminStudentPerformance(activeStudentId, subjectSlug),
+    queryFn: () => getStudentPerformanceData(activeStudentId, subjectSlug),
+    enabled: !!activeStudentId,
+  });
+
+  const subjects = subjectsData ?? [];
+  const activeSubject = subjects.find(s => s.slug === subjectSlug);
+
+  function handleSelectStudent(s: StudentSummary) {
+    setSelectedId(s.id);
+    setPPage(1);
+    setCPage(1);
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -67,14 +105,21 @@ export function AdminHomeTab() {
         <div className="list">
           {students.map(s => {
             const { color } = getGrade(s.avgScore);
+            const isSelected = selectedStudent?.id === s.id;
             return (
               <button key={s.id} className="list-row" style={{
                 cursor: 'pointer', width: '100%', textAlign: 'left',
-                background: selectedStudent?.id === s.id ? 'var(--panel-2)' : 'transparent',
+                background: isSelected ? 'var(--panel-2)' : 'transparent',
                 borderRadius: 8, padding: '10px 8px',
-              }} onClick={() => setSelectedId(s.id)}>
+                border: isSelected ? '1px solid var(--border)' : '1px solid transparent',
+                transition: 'background 0.15s, border-color 0.15s',
+              }} onClick={() => handleSelectStudent(s)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div className="avatar">{getInitials(s.name)}</div>
+                  <div className="avatar" style={{
+                    outline: isSelected ? '2px solid var(--accent)' : '2px solid transparent',
+                    outlineOffset: 2,
+                    transition: 'outline-color 0.15s',
+                  }}>{getInitials(s.name)}</div>
                   <div>
                     <div className="list-name">{s.name}</div>
                     <div className="list-meta">
@@ -90,7 +135,7 @@ export function AdminHomeTab() {
                     <div style={{ fontSize: 16, fontWeight: 700, color, fontFeatureSettings: '"tnum"' }}>{s.avgScore}%</div>
                     <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>avg</div>
                   </div>
-                  <ChevronRight size={14} color="var(--text-dim)" />
+                  <ChevronRight size={14} color={isSelected ? 'var(--accent)' : 'var(--text-dim)'} />
                 </div>
               </button>
             );
@@ -101,24 +146,161 @@ export function AdminHomeTab() {
 
       {selectedStudent && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 6px', fontSize: 13, color: 'var(--text-muted)' }}>
+          {/* Selected student label */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+            fontSize: 13, color: 'var(--text-muted)',
+            background: 'var(--accent-soft)', borderRadius: 10,
+            border: '1px solid var(--border)',
+          }}>
             <Users size={14} color="var(--accent)" />
-            Showing data for <strong style={{ color: 'var(--text)', marginLeft: 4 }}>{selectedStudent.name}</strong>
-            {selectedStudent.grade ? ` · ${selectedStudent.grade}` : ''}
+            Showing data for
+            <strong style={{ color: 'var(--text)', marginLeft: 2 }}>{selectedStudent.name}</strong>
+            {selectedStudent.grade ? (
+              <span style={{ color: 'var(--text-dim)' }}>· {selectedStudent.grade}</span>
+            ) : null}
           </div>
 
-          {/* Results graph */}
+          {/* Pending exams for student */}
+          <div className="card">
+            <div className="card-title" style={{ marginBottom: 16 }}>
+              <Clock size={15} color="var(--cyan)" /> Pending Exams
+              {pendingData && (
+                <span className="pill pill-soft" style={{ marginLeft: 6 }}>{pendingData.total}</span>
+              )}
+            </div>
+            {pendingLoading ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+            ) : !pendingData?.exams.length ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-dim)', fontSize: 13 }}>No pending exams</div>
+            ) : (
+              <div className="list">
+                {pendingData.exams.map(exam => (
+                  <div key={exam.id} className="list-row" style={{ padding: '10px 8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      {exam.subject ? (
+                        <SubjectBlock subject={exam.subject} size={36} />
+                      ) : (
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 10,
+                          background: 'var(--panel-2)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <BookOpen size={16} color="var(--text-dim)" />
+                        </div>
+                      )}
+                      <div>
+                        <div className="list-name">{exam.name}</div>
+                        <div className="list-meta">
+                          <span>{exam.subject?.name ?? 'Unknown'}</span>
+                          <span style={{ color: 'var(--text-dim)' }}>·</span>
+                          <span>{exam.grade?.label ?? '—'}</span>
+                          <span style={{ color: 'var(--text-dim)' }}>·</span>
+                          <span>{exam.questionCount ?? 0} Qs</span>
+                          <span style={{ color: 'var(--text-dim)' }}>·</span>
+                          <span>{exam.durationMinutes} min</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="pill pill-soft">Pending</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {pendingData && pendingData.pages > 1 && (
+              <Pagination page={pPage} total={pendingData.pages} onPage={setPPage} />
+            )}
+          </div>
+
+          {/* Completed exams for student */}
+          <div className="card">
+            <div className="card-title" style={{ marginBottom: 16 }}>
+              <FileText size={15} color="var(--green)" /> Completed Exams
+              {completedData && (
+                <span className="pill pill-soft" style={{ marginLeft: 6 }}>{completedData.total}</span>
+              )}
+            </div>
+            {completedLoading ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+            ) : !completedData?.submissions.length ? (
+              <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-dim)', fontSize: 13 }}>No completed exams</div>
+            ) : (
+              <div className="list">
+                {completedData.submissions.map(sub => {
+                  const { color } = getGrade(sub.score);
+                  return (
+                    <div key={sub.id} className="list-row" style={{ padding: '10px 8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        {sub.exam?.subject ? (
+                          <SubjectBlock subject={sub.exam.subject} size={36} />
+                        ) : (
+                          <div style={{
+                            width: 36, height: 36, borderRadius: 10,
+                            background: 'var(--panel-2)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <BookOpen size={16} color="var(--text-dim)" />
+                          </div>
+                        )}
+                        <div>
+                          <div className="list-name">{sub.exam?.name ?? 'Exam'}</div>
+                          <div className="list-meta">
+                            <span>{sub.exam?.subject?.name ?? '—'}</span>
+                            <span style={{ color: 'var(--text-dim)' }}>·</span>
+                            <span>{sub.correctCount}/{sub.totalQuestions} correct</span>
+                            <span style={{ color: 'var(--text-dim)' }}>·</span>
+                            <span>{formatDate(sub.submittedAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{
+                        fontSize: 15, fontWeight: 700, color,
+                        fontFeatureSettings: '"tnum"',
+                        minWidth: 52, textAlign: 'right',
+                      }}>
+                        {sub.score}%
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {completedData && completedData.pages > 1 && (
+              <Pagination page={cPage} total={completedData.pages} onPage={setCPage} />
+            )}
+          </div>
+
+          {/* Results chart */}
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
               <div className="card-title" style={{ margin: 0 }}>
                 <BarChart2 size={15} /> Results — {selectedStudent.name.split(' ')[0]}
               </div>
-              <div className="seg">
-                <button className={`seg-btn ${tf === 'monthly' ? 'active' : ''}`} onClick={() => setTf('monthly')}>Monthly</button>
-                <button className={`seg-btn ${tf === 'yearly' ? 'active' : ''}`} onClick={() => setTf('yearly')}>Yearly</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                {/* Subject selector */}
+                {subjects.length > 0 && (
+                  <select
+                    className="input"
+                    style={{ height: 32, fontSize: 12, padding: '0 10px', minWidth: 120 }}
+                    value={subjectSlug}
+                    onChange={e => setSubjectSlug(e.target.value)}
+                  >
+                    {subjects.map(s => (
+                      <option key={s.slug} value={s.slug}>{s.name}</option>
+                    ))}
+                  </select>
+                )}
+                <div className="seg">
+                  <button className={`seg-btn ${tf === 'monthly' ? 'active' : ''}`} onClick={() => setTf('monthly')}>Monthly</button>
+                  <button className={`seg-btn ${tf === 'yearly' ? 'active' : ''}`} onClick={() => setTf('yearly')}>Yearly</button>
+                </div>
               </div>
             </div>
-            <PerformanceChart subjectSlug="math" subjectColor="var(--accent)" />
+            <PerformanceChart
+              data={perfData ?? []}
+              subjectSlug={subjectSlug}
+              subjectColor={activeSubject?.color ?? 'var(--accent)'}
+            />
           </div>
         </>
       )}

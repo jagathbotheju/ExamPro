@@ -2,34 +2,27 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, Clock, Target, Flame, ChevronRight } from 'lucide-react';
+import { CheckCircle2, Clock, Target, Flame, ChevronRight, BarChart2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ScoreRing } from '@/app/_components/shared/score-ring';
 import { StatTile } from '@/app/_components/shared/stat-tile';
 import { PerformanceChart } from '@/app/_components/shared/performance-chart';
 import { PendingExamRow, CompletedExamRow } from '@/app/_components/shared/exam-row';
-import { getInitials, getSubjectColor } from '@/app/_lib/utils';
+import { getInitials } from '@/app/_lib/utils';
 import { getPendingExams } from '@/actions/student/getPendingExams';
 import { getCompletedExams } from '@/actions/student/getCompletedExams';
 import { getPerformanceData } from '@/actions/student/getPerformanceData';
+import { getSubjects } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
-import type { StudentProfile, Exam, ExamSubmission } from '@/app/_lib/types';
-
-const SUBJECTS = [
-  { slug: 'math', name: 'Mathematics' },
-  { slug: 'science', name: 'Science' },
-  { slug: 'history', name: 'History' },
-  { slug: 'english', name: 'English' },
-  { slug: 'buddhism', name: 'Buddhism' },
-  { slug: 'music', name: 'Music' },
-];
+import type { StudentProfile } from '@/app/_lib/types';
 
 interface HomeTabProps { profile: StudentProfile | null }
 
 export function HomeTab({ profile }: HomeTabProps) {
   const router = useRouter();
-  const [subject, setSubject] = useState('math');
+  const [subjectSlug, setSubjectSlug] = useState('math');
+  const [tf, setTf] = useState<'monthly' | 'yearly'>('monthly');
 
   const { data: pending = [] } = useQuery({
     queryKey: queryKeys.pendingExams(),
@@ -39,9 +32,13 @@ export function HomeTab({ profile }: HomeTabProps) {
     queryKey: queryKeys.completedExams(),
     queryFn: () => getCompletedExams(5),
   });
+  const { data: subjects = [] } = useQuery({
+    queryKey: queryKeys.subjects(),
+    queryFn: getSubjects,
+  });
   const { data: performanceData = [] } = useQuery({
-    queryKey: queryKeys.performanceData(subject),
-    queryFn: () => getPerformanceData(subject),
+    queryKey: queryKeys.performanceData(subjectSlug, tf),
+    queryFn: () => getPerformanceData(subjectSlug, tf),
   });
 
   const avgScore = completed.length
@@ -51,6 +48,11 @@ export function HomeTab({ profile }: HomeTabProps) {
   const firstName = profile?.name?.split(' ')[0] ?? 'Student';
   const rank = avgScore >= 90 ? 'Gold' : avgScore >= 75 ? 'Silver' : 'Bronze';
 
+  const activeSubject = subjects.find(s => s.slug === subjectSlug);
+
+  // Default to first DB subject if 'math' not found
+  const resolvedSlug = activeSubject ? subjectSlug : (subjects[0]?.slug ?? 'math');
+  const resolvedSubject = activeSubject ?? subjects[0];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -84,12 +86,42 @@ export function HomeTab({ profile }: HomeTabProps) {
       {/* Stats */}
       <div className="grid-4">
         <StatTile icon={CheckCircle2} iconColor="var(--green)" label="Completed" value={completed.length} trend="exams done" />
-        <StatTile icon={Clock} iconColor="var(--amber)" label="Pending" value={pending.length} trend="awaiting" />
-        <StatTile icon={Target} iconColor="var(--cyan)" label="Avg Accuracy" value={`${avgScore}%`} trend="all exams" />
-        <StatTile icon={Flame} iconColor="var(--accent)" label="Study Streak" value={profile?.studyStreak ?? 0} trend={`Best: ${profile?.bestStreak ?? 0}`} />
+        <StatTile icon={Clock}        iconColor="var(--amber)" label="Pending"   value={pending.length}   trend="awaiting" />
+        <StatTile icon={Target}       iconColor="var(--cyan)"  label="Avg Accuracy" value={`${avgScore}%`} trend="all exams" />
+        <StatTile icon={Flame}        iconColor="var(--accent)" label="Study Streak" value={profile?.studyStreak ?? 0} trend={`Best: ${profile?.bestStreak ?? 0}`} />
       </div>
 
-
+      {/* Performance Analytics */}
+      <div className="card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
+          <div className="card-title" style={{ margin: 0 }}>
+            <BarChart2 size={15} /> Performance Analytics
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {subjects.length > 0 && (
+              <select
+                className="input"
+                style={{ height: 32, fontSize: 12, padding: '0 10px', minWidth: 130 }}
+                value={resolvedSlug}
+                onChange={e => setSubjectSlug(e.target.value)}
+              >
+                {subjects.map(s => (
+                  <option key={s.slug} value={s.slug}>{s.name}</option>
+                ))}
+              </select>
+            )}
+            <div className="seg">
+              <button className={`seg-btn ${tf === 'monthly' ? 'active' : ''}`} onClick={() => setTf('monthly')}>Monthly</button>
+              <button className={`seg-btn ${tf === 'yearly'  ? 'active' : ''}`} onClick={() => setTf('yearly')}>Yearly</button>
+            </div>
+          </div>
+        </div>
+        <PerformanceChart
+          data={performanceData}
+          subjectSlug={resolvedSlug}
+          subjectColor={resolvedSubject?.color ?? 'var(--accent)'}
+        />
+      </div>
 
       {/* Pending Exams */}
       <div className="card">
@@ -127,19 +159,6 @@ export function HomeTab({ profile }: HomeTabProps) {
             ))}
           </div>
         )}
-      </div>
-
-      {/* Performance Analytics */}
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
-          <div className="card-title" style={{ margin: 0 }}>Performance Analytics</div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <select className="select" value={subject} onChange={e => setSubject(e.target.value)}>
-              {SUBJECTS.map(s => <option key={s.slug} value={s.slug}>{s.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <PerformanceChart data={performanceData} subjectSlug={subject} subjectColor={getSubjectColor(subject)} />
       </div>
     </div>
   );

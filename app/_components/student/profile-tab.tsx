@@ -11,7 +11,7 @@ import { getCompletedExams } from '@/actions/student/getCompletedExams';
 import { queryKeys } from '@/app/_lib/query-keys';
 import type { StudentProfile } from '@/app/_lib/types';
 
-const GRADES = ['Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12','Grade 13'];
+const GRADES = ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12', 'Grade 13'];
 
 function useClerkSignOut() {
   const clerk = useClerk();
@@ -54,7 +54,7 @@ export function ProfileTab({ profile }: ProfileTabProps) {
         <div className="grid grid-cols-[auto_1fr_auto] gap-6 items-center">
           <div className="profile-photo">
             <div className="stripes" />
-            <div className="ph-letter">{initials[0]}</div>
+            <div className="avatar-lg">{initials}</div>
           </div>
           <div>
             <div className="flex gap-2 mb-2">
@@ -152,13 +152,13 @@ export function ProfileTab({ profile }: ProfileTabProps) {
         ) : (
           <div className="grid-2 gap-[18px]">
             {[
-              { label: 'Full Name',     value: profile?.name },
-              { label: 'Email',         value: profile?.email },
-              { label: 'School',        value: profile?.school },
-              { label: 'Grade',         value: profile?.grade },
+              { label: 'Full Name', value: profile?.name },
+              { label: 'Email', value: profile?.email },
+              { label: 'School', value: profile?.school },
+              { label: 'Grade', value: profile?.grade },
               { label: 'Date of Birth', value: formatDate(profile?.dateOfBirth ?? null) },
-              { label: 'Age',           value: age ? `${age} years` : '—' },
-              { label: 'Sex',           value: profile?.sex },
+              { label: 'Age', value: age ? `${age} years` : '—' },
+              { label: 'Sex', value: profile?.sex },
             ].map(({ label, value }) => (
               <div key={label}>
                 <div className="label-tiny mb-1">{label}</div>
