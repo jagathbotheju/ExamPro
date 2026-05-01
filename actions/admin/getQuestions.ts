@@ -6,7 +6,7 @@ import type { Question } from '@/app/_lib/types';
 
 const PAGE_SIZE = 10;
 
-export async function getAdminQuestions(page = 1, gradeId?: string, subjectId?: string, search = ''): Promise<{ questions: Question[]; total: number; pages: number }> {
+export async function getAdminQuestions(page = 1, gradeId?: string, subjectId?: string, search = '', unusedOnly = false): Promise<{ questions: Question[]; total: number; pages: number }> {
   const { userId } = await auth();
   if (!userId) throw new Error('Forbidden');
   const _user = await currentUser();
@@ -20,7 +20,8 @@ export async function getAdminQuestions(page = 1, gradeId?: string, subjectId?: 
   const filtered = all.filter(q =>
     (!gradeId || q.gradeId === gradeId) &&
     (!subjectId || q.subjectId === subjectId) &&
-    (!search || q.body.toLowerCase().includes(search.toLowerCase()))
+    (!search || q.body.toLowerCase().includes(search.toLowerCase())) &&
+    (!unusedOnly || (q.usesCount ?? 0) === 0)
   );
 
   const total = filtered.length;

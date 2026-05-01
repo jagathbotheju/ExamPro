@@ -13,7 +13,7 @@ export const queryKeys = {
   adminStudents: (page: number, search?: string) => ['admin', 'students', page, search] as const,
   adminStudentDetail: (studentId: string) => ['admin', 'student', studentId] as const,
   adminExams: (page: number, grade?: string, subject?: string) => ['admin', 'exams', page, { grade, subject }] as const,
-  adminQuestions: (page: number, grade?: string, subject?: string, search?: string) =>
-    ['admin', 'questions', page, { grade, subject, search }] as const,
+  adminQuestions: (page: number, grade?: string, subject?: string, search?: string, unusedOnly?: boolean) =>
+    ['admin', 'questions', page, { grade, subject, search, unusedOnly }] as const,
   adminStats: () => ['admin', 'stats'] as const,
 };

@@ -21,19 +21,23 @@ export async function loadQuestionsFromBank(
     with: { subject: true, grade: true },
   });
 
-  // Get question IDs that students have previously answered incorrectly
+  // Get question IDs that students have previously answered incorrectly (unresolved)
   const incorrects = await db.query.incorrectAnswers.findMany({
     where: and(eq(incorrectAnswers.subjectId, subjectId), isNull(incorrectAnswers.resolvedAt)),
   });
   const incorrectQIds = new Set(incorrects.map(i => i.questionId));
 
-  // Shuffle, but put incorrectly-answered questions first
-  const priority = pool.filter(q => incorrectQIds.has(q.id));
-  const rest = pool.filter(q => !incorrectQIds.has(q.id));
-  const shuffledPriority = priority.sort(() => Math.random() - 0.5);
-  const shuffledRest = rest.sort(() => Math.random() - 0.5);
+  // 3-tier priority, each tier shuffled independently:
+  // Tier 1 — unused (usesCount === 0): brand-new questions never in any exam
+  // Tier 2 — incorrectly answered (usesCount > 0): students struggled with these
+  // Tier 3 — everything else: used and not flagged
+  const shuffle = <T,>(arr: T[]): T[] => arr.slice().sort(() => Math.random() - 0.5);
 
-  const selected = [...shuffledPriority, ...shuffledRest].slice(0, count);
+  const unused    = shuffle(pool.filter(q => (q.usesCount ?? 0) === 0));
+  const incorrect = shuffle(pool.filter(q => (q.usesCount ?? 0) > 0 && incorrectQIds.has(q.id)));
+  const other     = shuffle(pool.filter(q => (q.usesCount ?? 0) > 0 && !incorrectQIds.has(q.id)));
+
+  const selected = [...unused, ...incorrect, ...other].slice(0, count);
 
   return selected.map(q => ({
     id: q.id, body: q.body,

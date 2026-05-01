@@ -2,13 +2,15 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, ScanText, ClipboardPaste } from 'lucide-react';
 import { toast } from 'sonner';
 import { SubjectBlock } from '@/app/_components/shared/subject-block';
 import { Pagination } from '@/app/_components/shared/pagination';
 import {
   Select, SelectContent, SelectItem, SelectTrigger,
 } from '@/app/_components/ui/select';
+import { ScanQuestionsDialog } from '@/app/_components/admin/scan-questions-dialog';
+import { PasteQuestionsDialog } from '@/app/_components/admin/paste-questions-dialog';
 import { getAdminQuestions } from '@/actions/admin/getQuestions';
 import { createQuestion, updateQuestion, deleteQuestion } from '@/actions/admin/manageQuestion';
 import { getSubjects, getGrades } from '@/actions/admin/manageSubjectsGrades';
@@ -30,12 +32,15 @@ export function AdminQuestionsTab() {
   const [gradeFilter, setGradeFilter] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [unusedOnly, setUnusedOnly] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const [editQ, setEditQ] = useState<Question | null>(null);
 
   const { data } = useQuery({
-    queryKey: queryKeys.adminQuestions(page, gradeFilter, subjectFilter, search),
-    queryFn: () => getAdminQuestions(page, gradeFilter || undefined, subjectFilter || undefined, search),
+    queryKey: queryKeys.adminQuestions(page, gradeFilter, subjectFilter, search, unusedOnly),
+    queryFn: () => getAdminQuestions(page, gradeFilter || undefined, subjectFilter || undefined, search, unusedOnly),
   });
   const { data: subjectsRaw = [] } = useQuery({ queryKey: queryKeys.subjects(), queryFn: getSubjects });
   const { data: gradesRaw = [] } = useQuery({ queryKey: queryKeys.grades(), queryFn: getGrades });
@@ -63,9 +68,17 @@ export function AdminQuestionsTab() {
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: '-0.01em' }}>Questions Bank</h1>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Manage the question pool used to build exams.</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
-          <Plus size={14} /> Add Question
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn-ghost" onClick={() => setScanOpen(true)}>
+            <ScanText size={14} /> Scan from PDF/Image
+          </button>
+          <button className="btn btn-ghost" onClick={() => setPasteOpen(true)}>
+            <ClipboardPaste size={14} /> Paste JSON
+          </button>
+          <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
+            <Plus size={14} /> Add Question
+          </button>
+        </div>
       </div>
 
       <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: 16 }}>
@@ -97,6 +110,18 @@ export function AdminQuestionsTab() {
           style={{ flex: 1, minWidth: 180 }}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
         />
+        <button
+          onClick={() => { setUnusedOnly(v => !v); setPage(1); }}
+          style={{
+            fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 8, cursor: 'pointer',
+            background: unusedOnly ? 'var(--accent-soft)' : 'transparent',
+            color: unusedOnly ? 'var(--accent)' : 'var(--text-muted)',
+            border: `1px solid ${unusedOnly ? 'var(--accent)' : 'var(--border)'}`,
+            transition: 'all 0.15s',
+          }}
+        >
+          Unused only
+        </button>
         <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>{data?.total ?? 0} questions</div>
       </div>
 
@@ -134,6 +159,22 @@ export function AdminQuestionsTab() {
         </div>
         <Pagination page={page} total={data?.pages ?? 1} onPage={setPage} />
       </div>
+
+      {scanOpen && (
+        <ScanQuestionsDialog
+          subjects={subjects} grades={grades}
+          onClose={() => setScanOpen(false)}
+          onImported={() => { setScanOpen(false); qc.invalidateQueries({ queryKey: ['admin', 'questions'] }); }}
+        />
+      )}
+
+      {pasteOpen && (
+        <PasteQuestionsDialog
+          subjects={subjects} grades={grades}
+          onClose={() => setPasteOpen(false)}
+          onImported={() => { setPasteOpen(false); qc.invalidateQueries({ queryKey: ['admin', 'questions'] }); }}
+        />
+      )}
 
       {(createOpen || editQ) && (
         <QuestionDialog
