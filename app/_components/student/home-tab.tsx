@@ -89,18 +89,7 @@ export function HomeTab({ profile }: HomeTabProps) {
         <StatTile icon={Flame} iconColor="var(--accent)" label="Study Streak" value={profile?.studyStreak ?? 0} trend={`Best: ${profile?.bestStreak ?? 0}`} />
       </div>
 
-      {/* Performance Analytics */}
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
-          <div className="card-title" style={{ margin: 0 }}>Performance Analytics</div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <select className="select" value={subject} onChange={e => setSubject(e.target.value)}>
-              {SUBJECTS.map(s => <option key={s.slug} value={s.slug}>{s.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <PerformanceChart data={performanceData} subjectSlug={subject} subjectColor={getSubjectColor(subject)} />
-      </div>
+
 
       {/* Pending Exams */}
       <div className="card">
@@ -138,6 +127,19 @@ export function HomeTab({ profile }: HomeTabProps) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Performance Analytics */}
+      <div className="card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
+          <div className="card-title" style={{ margin: 0 }}>Performance Analytics</div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <select className="select" value={subject} onChange={e => setSubject(e.target.value)}>
+              {SUBJECTS.map(s => <option key={s.slug} value={s.slug}>{s.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <PerformanceChart data={performanceData} subjectSlug={subject} subjectColor={getSubjectColor(subject)} />
       </div>
     </div>
   );

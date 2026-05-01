@@ -11,13 +11,14 @@ import { createExam } from '@/actions/admin/createExam';
 import { deleteExam } from '@/actions/admin/deleteExam';
 import { assignExam } from '@/actions/admin/assignExam';
 import { getStudents } from '@/actions/admin/getStudents';
-import { getAdminQuestions } from '@/actions/admin/getQuestions';
 import { loadQuestionsFromBank } from '@/actions/admin/loadQuestionsFromBank';
+import { getQuestionPool } from '@/actions/admin/getQuestionPool';
+import type { PoolQuestion } from '@/actions/admin/getQuestionPool';
 import { getSubjects, getGrades } from '@/actions/admin/manageSubjectsGrades';
 import { getExamDetail } from '@/actions/admin/getExamDetail';
 import { queryKeys } from '@/app/_lib/query-keys';
 import { formatDate } from '@/app/_lib/utils';
-import type { Exam, Question, Subject, Grade } from '@/app/_lib/types';
+import type { Exam, Subject, Grade } from '@/app/_lib/types';
 
 export function AdminExamsTab() {
   const qc = useQueryClient();
@@ -148,12 +149,12 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const { data } = useQuery({
+  const { data: poolData } = useQuery({
     queryKey: ['bank-pool', subjectId, gradeId],
-    queryFn: () => getAdminQuestions(1, gradeId, subjectId, ''),
+    queryFn: () => getQuestionPool(subjectId, gradeId),
     enabled: !!(subjectId && gradeId),
   });
-  const pool: Question[] = (data?.questions as Question[]) ?? [];
+  const pool: PoolQuestion[] = poolData ?? [];
 
   const toggle = (id: string) => setPicked(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -236,20 +237,45 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
           </button>
         </div>
 
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
+          {([
+            { tier: 'unused',    label: 'New',       color: 'var(--green)'  },
+            { tier: 'incorrect', label: 'Needs Review', color: 'var(--amber)' },
+            { tier: 'other',     label: 'Used',      color: 'var(--text-dim)' },
+          ] as const).map(({ tier, label, color }) => (
+            <div key={tier} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+              {label}
+            </div>
+          ))}
+        </div>
+
         <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border-soft)', borderRadius: 10, padding: 8, marginBottom: 14 }}>
           {pool.length === 0 ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
               No questions in bank for this subject + grade.
             </div>
-          ) : pool.map(q => (
-            <label key={q.id} style={{ display: 'flex', gap: 15, padding: '10px 8px', borderRadius: 8, cursor: 'pointer', background: picked.has(q.id) ? 'var(--accent-soft)' : 'transparent' }}>
-              <input type="checkbox" checked={picked.has(q.id)} onChange={() => toggle(q.id)} style={{ marginTop: 3 }} />
-              <div>
-                <div style={{ fontSize: 13, color: 'var(--text)' }}>{q.body}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{q.difficulty} · used {q.usesCount}×</div>
-              </div>
-            </label>
-          ))}
+          ) : pool.map(q => {
+            const tierColor = q.tier === 'unused' ? 'var(--green)' : q.tier === 'incorrect' ? 'var(--amber)' : 'var(--text-dim)';
+            const tierLabel = q.tier === 'unused' ? 'New' : q.tier === 'incorrect' ? 'Needs Review' : 'Used';
+            return (
+              <label key={q.id} style={{ display: 'flex', gap: 12, padding: '9px 8px', borderRadius: 8, cursor: 'pointer', background: picked.has(q.id) ? 'var(--accent-soft)' : 'transparent', alignItems: 'flex-start' }}>
+                <input type="checkbox" checked={picked.has(q.id)} onChange={() => toggle(q.id)} style={{ marginTop: 3, flexShrink: 0 }} />
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: tierColor, flexShrink: 0, marginTop: 5 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>{q.body}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'flex', gap: 6 }}>
+                    <span style={{ color: tierColor, fontWeight: 600 }}>{tierLabel}</span>
+                    <span style={{ color: 'var(--text-dim)' }}>·</span>
+                    <span>{q.difficulty}</span>
+                    <span style={{ color: 'var(--text-dim)' }}>·</span>
+                    <span>used {q.usesCount}×</span>
+                  </div>
+                </div>
+              </label>
+            );
+          })}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
