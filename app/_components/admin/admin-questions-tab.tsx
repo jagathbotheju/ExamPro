@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, ScanText, ClipboardPaste } from 'lucide-react';
+import { Plus, Pencil, Trash2, ScanText, ClipboardPaste, ImagePlus, X } from 'lucide-react';
+import { CldUploadWidget, CldImage } from 'next-cloudinary';
 import { toast } from 'sonner';
 import { SubjectBlock } from '@/app/_components/shared/subject-block';
 import { Pagination } from '@/app/_components/shared/pagination';
@@ -15,6 +16,7 @@ import { getAdminQuestions } from '@/actions/admin/getQuestions';
 import { createQuestion, updateQuestion, deleteQuestion } from '@/actions/admin/manageQuestion';
 import { getSubjects, getGrades } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
+import { RichTextEditor, stripHtml, isRichTextEmpty } from '@/app/_components/shared/rich-text-editor';
 import type { Question, Subject, Grade, Difficulty } from '@/app/_lib/types';
 
 const DIFF_COLORS: Record<Difficulty, string> = {
@@ -134,7 +136,7 @@ export function AdminQuestionsTab() {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flex: 1, minWidth: 0 }}>
                 {q.subject && <SubjectBlock subject={q.subject} />}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="list-name" style={{ whiteSpace: 'normal', lineHeight: 1.45 }}>{q.body}</div>
+                  <div className="list-name" style={{ whiteSpace: 'normal', lineHeight: 1.45 }}>{stripHtml(q.body)}</div>
                   <div className="list-meta" style={{ marginTop: 4 }}>
                     {q.subject && <span style={{ color: q.subject.color }}>{q.subject.name}</span>}
                     {q.subject && <span style={{ color: 'var(--text-dim)' }}>·</span>}
@@ -143,6 +145,14 @@ export function AdminQuestionsTab() {
                     <span style={{ color: DIFF_COLORS[q.difficulty] }}>{q.difficulty}</span>
                     <span style={{ color: 'var(--text-dim)' }}>·</span>
                     <span>used {q.usesCount}×</span>
+                    {q.imageUrl && (
+                      <>
+                        <span style={{ color: 'var(--text-dim)' }}>·</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: 'var(--accent)' }}>
+                          <ImagePlus size={11} />image
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -200,17 +210,18 @@ function QuestionDialog({ subjects, grades, question, onClose, onSaved }: {
   const [subjectId, setSubjectId] = useState(question?.subjectId ?? (_lastSubjectId || (subjects[0]?.id ?? '')));
   const [gradeId, setGradeId] = useState(question?.gradeId ?? (_lastGradeId || (grades[0]?.id ?? '')));
   const [difficulty, setDifficulty] = useState<Difficulty>(question?.difficulty ?? 'Medium');
+  const [imageUrl, setImageUrl] = useState<string | null>(question?.imageUrl ?? null);
   const [saving, setSaving] = useState(false);
 
   const setOpt = (i: number, v: string) => setOpts(o => { const n = [...o]; n[i] = v; return n; });
 
   const handleSave = async () => {
-    if (!body.trim() || opts.some(o => !o.trim())) return;
+    if (isRichTextEmpty(body) || opts.some(o => !o.trim())) return;
     setSaving(true);
     try {
       _lastSubjectId = subjectId;
       _lastGradeId = gradeId;
-      const payload = { body: body.trim(), options: opts.map(o => o.trim()), correctIndex: correct, subjectId, gradeId, difficulty };
+      const payload = { body: body.trim(), options: opts.map(o => o.trim()), correctIndex: correct, subjectId, gradeId, difficulty, imageUrl };
       if (editing && question) {
         await updateQuestion(question.id, payload);
         toast.success('Question updated');
@@ -235,12 +246,72 @@ function QuestionDialog({ subjects, grades, question, onClose, onSaved }: {
 
         <div style={{ marginBottom: 14 }}>
           <div className="label-tiny" style={{ marginBottom: 6 }}>Question Body</div>
-          <textarea
-            className="input" rows={3}
-            style={{ resize: 'vertical', width: '100%' }}
+          <RichTextEditor
+            value={body}
+            onChange={setBody}
             placeholder="Enter the question text…"
-            value={body} onChange={e => setBody(e.target.value)}
+            minHeight={110}
           />
+        </div>
+
+        {/* Image upload */}
+        <div style={{ marginBottom: 14 }}>
+          <div className="label-tiny" style={{ marginBottom: 8 }}>Question Image <span style={{ color: 'var(--text-dim)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
+          {imageUrl ? (
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <CldImage
+                src={imageUrl}
+                width={420}
+                height={220}
+                alt="Question image"
+                style={{
+                  borderRadius: 10,
+                  objectFit: 'cover',
+                  display: 'block',
+                  border: '1px solid var(--border)',
+                  maxWidth: '100%',
+                }}
+              />
+              <button
+                onClick={() => setImageUrl(null)}
+                style={{
+                  position: 'absolute', top: 8, right: 8,
+                  background: 'rgba(10,18,32,0.85)', border: '1px solid var(--border)',
+                  borderRadius: '50%', width: 28, height: 28, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: 'var(--text)',
+                }}
+                title="Remove image"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ) : (
+            <CldUploadWidget
+              signatureEndpoint="/api/cloudinary/sign"
+              options={{ folder: 'exam-pro/questions', maxFiles: 1, resourceType: 'image', clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }}
+              onSuccess={(result) => {
+                const info = result.info as { secure_url: string } | undefined;
+                if (info?.secure_url) setImageUrl(info.secure_url);
+              }}
+            >
+              {({ open }) => (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{
+                    width: '100%', height: 80, borderStyle: 'dashed',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    justifyContent: 'center', gap: 6, color: 'var(--text-muted)',
+                  }}
+                  onClick={() => open()}
+                >
+                  <ImagePlus size={20} />
+                  <span style={{ fontSize: 12 }}>Click to upload image</span>
+                </button>
+              )}
+            </CldUploadWidget>
+          )}
         </div>
 
         <div style={{ marginBottom: 14 }}>
@@ -305,7 +376,7 @@ function QuestionDialog({ subjects, grades, question, onClose, onSaved }: {
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button
             className="btn btn-primary"
-            disabled={!body.trim() || opts.some(o => !o.trim()) || saving}
+            disabled={isRichTextEmpty(body) || opts.some(o => !o.trim()) || saving}
             onClick={handleSave}
           >{saving ? 'Saving…' : editing ? 'Update Question' : 'Add Question'}</button>
         </div>

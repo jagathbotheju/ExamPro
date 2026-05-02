@@ -12,7 +12,7 @@ import { PendingExamRow, CompletedExamRow } from '@/app/_components/shared/exam-
 import { getInitials } from '@/app/_lib/utils';
 import { getPendingExams } from '@/actions/student/getPendingExams';
 import { getCompletedExams } from '@/actions/student/getCompletedExams';
-import { getPerformanceData } from '@/actions/student/getPerformanceData';
+import { getPerformanceData, getAllSubjectsPerformanceData } from '@/actions/student/getPerformanceData';
 import { getSubjects } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
 import type { StudentProfile } from '@/app/_lib/types';
@@ -36,9 +36,17 @@ export function HomeTab({ profile }: HomeTabProps) {
     queryKey: queryKeys.subjects(),
     queryFn: getSubjects,
   });
+  const isAll = subjectSlug === 'all';
+
   const { data: performanceData = [] } = useQuery({
     queryKey: queryKeys.performanceData(subjectSlug, tf),
     queryFn: () => getPerformanceData(subjectSlug, tf),
+    enabled: !isAll,
+  });
+  const { data: multiPerformanceData = [] } = useQuery({
+    queryKey: ['student', 'performance', 'all', tf],
+    queryFn: () => getAllSubjectsPerformanceData(tf),
+    enabled: isAll,
   });
 
   const avgScore = completed.length
@@ -86,42 +94,12 @@ export function HomeTab({ profile }: HomeTabProps) {
       {/* Stats */}
       <div className="grid-4">
         <StatTile icon={CheckCircle2} iconColor="var(--green)" label="Completed" value={completed.length} trend="exams done" />
-        <StatTile icon={Clock}        iconColor="var(--amber)" label="Pending"   value={pending.length}   trend="awaiting" />
-        <StatTile icon={Target}       iconColor="var(--cyan)"  label="Avg Accuracy" value={`${avgScore}%`} trend="all exams" />
-        <StatTile icon={Flame}        iconColor="var(--accent)" label="Study Streak" value={profile?.studyStreak ?? 0} trend={`Best: ${profile?.bestStreak ?? 0}`} />
+        <StatTile icon={Clock} iconColor="var(--amber)" label="Pending" value={pending.length} trend="awaiting" />
+        <StatTile icon={Target} iconColor="var(--cyan)" label="Avg Accuracy" value={`${avgScore}%`} trend="all exams" />
+        <StatTile icon={Flame} iconColor="var(--accent)" label="Study Streak" value={profile?.studyStreak ?? 0} trend={`Best: ${profile?.bestStreak ?? 0}`} />
       </div>
 
-      {/* Performance Analytics */}
-      <div className="card">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
-          <div className="card-title" style={{ margin: 0 }}>
-            <BarChart2 size={15} /> Performance Analytics
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {subjects.length > 0 && (
-              <select
-                className="input"
-                style={{ height: 32, fontSize: 12, padding: '0 10px', minWidth: 130 }}
-                value={resolvedSlug}
-                onChange={e => setSubjectSlug(e.target.value)}
-              >
-                {subjects.map(s => (
-                  <option key={s.slug} value={s.slug}>{s.name}</option>
-                ))}
-              </select>
-            )}
-            <div className="seg">
-              <button className={`seg-btn ${tf === 'monthly' ? 'active' : ''}`} onClick={() => setTf('monthly')}>Monthly</button>
-              <button className={`seg-btn ${tf === 'yearly'  ? 'active' : ''}`} onClick={() => setTf('yearly')}>Yearly</button>
-            </div>
-          </div>
-        </div>
-        <PerformanceChart
-          data={performanceData}
-          subjectSlug={resolvedSlug}
-          subjectColor={resolvedSubject?.color ?? 'var(--accent)'}
-        />
-      </div>
+
 
       {/* Pending Exams */}
       <div className="card">
@@ -159,6 +137,41 @@ export function HomeTab({ profile }: HomeTabProps) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Performance Analytics */}
+      <div className="card">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 12 }}>
+          <div className="card-title" style={{ margin: 0 }}>
+            <BarChart2 size={15} /> Performance Analytics
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {subjects.length > 0 && (
+              <select
+                className="input"
+                style={{ height: 32, fontSize: 12, padding: '0 10px', minWidth: 130 }}
+                value={isAll ? 'all' : resolvedSlug}
+                onChange={e => setSubjectSlug(e.target.value)}
+              >
+                <option value="all">All Subjects</option>
+                {subjects.map(s => (
+                  <option key={s.slug} value={s.slug}>{s.name}</option>
+                ))}
+              </select>
+            )}
+            <div className="seg">
+              <button className={`seg-btn ${tf === 'monthly' ? 'active' : ''}`} onClick={() => setTf('monthly')}>Monthly</button>
+              <button className={`seg-btn ${tf === 'yearly' ? 'active' : ''}`} onClick={() => setTf('yearly')}>Yearly</button>
+            </div>
+          </div>
+        </div>
+        <PerformanceChart
+          data={performanceData}
+          subjectSlug={resolvedSlug}
+          subjectColor={resolvedSubject?.color ?? 'var(--accent)'}
+          multiData={isAll ? multiPerformanceData : undefined}
+          allSubjects={isAll ? subjects : undefined}
+        />
       </div>
     </div>
   );

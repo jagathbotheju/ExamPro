@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { bulkCreateQuestions } from '@/actions/admin/bulkCreateQuestions';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/app/_components/ui/select';
 import { SubjectBlock } from '@/app/_components/shared/subject-block';
+import { RichTextEditor, isRichTextEmpty } from '@/app/_components/shared/rich-text-editor';
 import type { Subject, Grade, Difficulty } from '@/app/_lib/types';
 
 interface EditableQuestion {
@@ -149,7 +150,7 @@ export function PasteQuestionsDialog({ subjects, grades, onClose, onImported }: 
     setQuestions(qs => qs.filter((_, idx) => idx !== i));
 
   const canImport = questions.length > 0 && subjectId && gradeId &&
-    questions.every(q => q.body.trim() && q.options.every(o => o.trim()));
+    questions.every(q => !isRichTextEmpty(q.body) && q.options.every(o => o.trim()));
 
   const handleImport = async () => {
     if (!canImport) return;
@@ -308,13 +309,14 @@ export function PasteQuestionsDialog({ subjects, grades, onClose, onImported }: 
                     </span>
                     <div style={{ flex: 1 }}>
                       {/* Editable body */}
-                      <textarea
-                        className="input"
-                        rows={2}
-                        style={{ resize: 'vertical', width: '100%', fontSize: 13, lineHeight: 1.5, marginBottom: 6 }}
-                        value={q.body}
-                        onChange={e => updateBody(qi, e.target.value)}
-                      />
+                      <div style={{ marginBottom: 6 }}>
+                        <RichTextEditor
+                          value={q.body}
+                          onChange={v => updateBody(qi, v)}
+                          placeholder="Enter question text…"
+                          minHeight={72}
+                        />
+                      </div>
 
                       {/* Difficulty + expand toggle */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

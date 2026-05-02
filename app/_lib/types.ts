@@ -32,6 +32,7 @@ export interface Question {
   gradeId: string | null;
   difficulty: Difficulty;
   usesCount: number;
+  imageUrl?: string | null;
   subject?: Subject;
   grade?: Grade;
 }

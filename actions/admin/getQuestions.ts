@@ -36,6 +36,7 @@ export async function getAdminQuestions(page = 1, gradeId?: string, subjectId?: 
       subjectId: q.subjectId, gradeId: q.gradeId,
       difficulty: q.difficulty as 'Easy' | 'Medium' | 'Hard',
       usesCount: q.usesCount,
+      imageUrl: q.imageUrl ?? null,
       subject: q.subject ?? undefined,
       grade: q.grade ?? undefined,
     })),

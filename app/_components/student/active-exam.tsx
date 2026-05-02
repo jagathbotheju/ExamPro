@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Flag, ChevronLeft, ChevronRight, Send, X } from 'lucide-react';
+import { Flag, ChevronLeft, ChevronRight, Send, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useExamStore } from '@/store/exam-store';
 import { formatTime } from '@/app/_lib/utils';
 import { submitExam } from '@/actions/student/submitExam';
+import {
+  Dialog, DialogContent, DialogHeader, DialogFooter,
+  DialogTitle, DialogDescription,
+} from '@/app/_components/ui/dialog';
 import type { Exam, Question } from '@/app/_lib/types';
 
 interface ActiveExamProps {
@@ -19,24 +23,31 @@ export function ActiveExam({ exam, questions }: ActiveExamProps) {
   const store = useExamStore();
   const timerRef = useRef<ReturnType<typeof setInterval>>(null);
   const startTimeRef = useRef(Date.now());
+  const submittingRef = useRef(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
 
   useEffect(() => {
     store.initExam(exam.id, questions, exam.durationMinutes * 60);
     timerRef.current = setInterval(() => store.tick(), 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exam.id]);
 
   const handleSubmit = useCallback(async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
     store.startGrading();
     const timeSpent = Math.round((Date.now() - startTimeRef.current) / 1000);
+    const { answers, timeRemaining } = useExamStore.getState();
     try {
-      await submitExam({ examId: exam.id, answers: store.answers, timeSpentSeconds: timeSpent });
+      await submitExam({ examId: exam.id, answers, timeSpentSeconds: timeSpent });
       router.replace(`/exam/${exam.id}/result`);
     } catch {
       toast.error('Failed to submit. Please try again.');
-      store.initExam(exam.id, questions, store.timeRemaining);
+      submittingRef.current = false;
+      store.initExam(exam.id, questions, timeRemaining);
     }
   }, [exam.id, store, router, questions]);
 
@@ -68,18 +79,20 @@ export function ActiveExam({ exam, questions }: ActiveExamProps) {
       {/* Top bar */}
       <div className="exam-topbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => { if (confirm('Cancel exam? Progress will be lost.')) { store.reset(); router.push('/dashboard'); } }}>
-            <X size={14} /> Cancel
-          </button>
+
           <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>{exam.name}</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <div className={`timer ${store.timeRemaining < 60 ? 'urgent' : ''}`}>
             {formatTime(store.timeRemaining)}
           </div>
-          <button className="btn btn-red" onClick={() => { if (confirm('Submit exam?')) handleSubmit(); }}>
+          {/* <button className="btn btn-red" onClick={() => { if (confirm('Submit exam?')) handleSubmit(); }}>
             <Send size={14} /> Submit
+          </button> */}
+          <button className="btn btn-red" onClick={() => setShowCancelDialog(true)}>
+            <X size={14} /> Cancel
           </button>
+
         </div>
       </div>
 
@@ -91,9 +104,11 @@ export function ActiveExam({ exam, questions }: ActiveExamProps) {
             <span className="label-tiny">Question {store.currentIndex + 1} of {questions.length}</span>
             {store.flagged.has(q.id) && <span className="pill pill-amber" style={{ marginLeft: 10 }}>FLAGGED</span>}
           </div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', lineHeight: 1.6, marginBottom: 28 }}>
-            {q.body}
-          </div>
+          <div
+            className="rich-text-display"
+            style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', lineHeight: 1.6, marginBottom: 28 }}
+            dangerouslySetInnerHTML={{ __html: q.body }}
+          />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {q.options.map((opt, i) => (
               <button
@@ -122,7 +137,7 @@ export function ActiveExam({ exam, questions }: ActiveExamProps) {
                 Next <ChevronRight size={14} />
               </button>
             ) : (
-              <button className="btn btn-primary" onClick={() => { if (confirm('Submit exam?')) handleSubmit(); }}>
+              <button className="btn btn-primary" onClick={() => setShowSubmitDialog(true)}>
                 <Send size={14} /> Finish & Submit
               </button>
             )}
@@ -169,6 +184,58 @@ export function ActiveExam({ exam, questions }: ActiveExamProps) {
           </div>
         </div>
       </div>
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 28 }}>
+          <DialogHeader>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <AlertTriangle size={20} color="var(--red)" />
+              <DialogTitle style={{ color: 'var(--text)', fontSize: 16 }}>Cancel exam?</DialogTitle>
+            </div>
+            <DialogDescription>
+              All your progress and answers will be lost. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter style={{ marginTop: 24 }}>
+            <button className="btn btn-ghost" onClick={() => setShowCancelDialog(false)}>Keep going</button>
+            <button
+              className="btn btn-red"
+              onClick={() => {
+                setShowCancelDialog(false);
+                if (timerRef.current) clearInterval(timerRef.current);
+                store.reset();
+                router.push('/dashboard');
+              }}
+            >
+              <X size={14} /> Yes, cancel
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
+        <DialogContent style={{ background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 28 }}>
+          <DialogHeader>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <Send size={18} color="var(--accent)" />
+              <DialogTitle style={{ color: 'var(--text)', fontSize: 16 }}>Submit exam?</DialogTitle>
+            </div>
+            <DialogDescription>
+              {answered < questions.length
+                ? `You have ${questions.length - answered} unanswered question${questions.length - answered > 1 ? 's' : ''}. You won't be able to change your answers after submitting.`
+                : 'You have answered all questions. Ready to submit?'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter style={{ marginTop: 24 }}>
+            <button className="btn btn-ghost" onClick={() => setShowSubmitDialog(false)}>Review answers</button>
+            <button
+              className="btn btn-primary"
+              onClick={() => { setShowSubmitDialog(false); handleSubmit(); }}
+            >
+              <Send size={14} /> Submit now
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

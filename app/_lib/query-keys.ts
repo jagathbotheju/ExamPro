@@ -15,6 +15,7 @@ export const queryKeys = {
   adminStudentPendingExams: (studentId: string, page: number) => ['admin', 'student', studentId, 'pending', page] as const,
   adminStudentCompletedExams: (studentId: string, page: number) => ['admin', 'student', studentId, 'completed', page] as const,
   adminStudentPerformance: (studentId: string, subjectSlug: string) => ['admin', 'student', studentId, 'performance', subjectSlug] as const,
+  adminStudentAllPerformance: (studentId: string) => ['admin', 'student', studentId, 'performance', 'all'] as const,
   adminExams: (page: number, grade?: string, subject?: string) => ['admin', 'exams', page, { grade, subject }] as const,
   adminQuestions: (page: number, grade?: string, subject?: string, search?: string, unusedOnly?: boolean) =>
     ['admin', 'questions', page, { grade, subject, search, unusedOnly }] as const,

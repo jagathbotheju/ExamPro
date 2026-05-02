@@ -540,3 +540,14 @@ html.light {
   --sidebar-accent-foreground: #111827;
   --sidebar-border:     #dde3ef;
 }
+
+/* Rich text read-only display — mirrors .rich-editor-content prose styles */
+.rich-text-display strong { font-weight: 700; }
+.rich-text-display em { font-style: italic; }
+.rich-text-display u { text-decoration: underline; }
+.rich-text-display sup { font-size: 0.75em; vertical-align: super; }
+.rich-text-display sub { font-size: 0.75em; vertical-align: sub; }
+.rich-text-display p { margin: 0 0 6px; }
+.rich-text-display p:last-child { margin-bottom: 0; }
+.rich-text-display ul, .rich-text-display ol { margin: 4px 0; padding-left: 20px; }
+.rich-text-display li { margin: 2px 0; }
