@@ -51,6 +51,7 @@ export const useExamStore = create<ExamStore>((set, get) => ({
 
   tick: () =>
     set(s => {
+      if (s.phase !== 'active') return s;
       const next = s.timeRemaining - 1;
       if (next <= 0) return { timeRemaining: 0, phase: 'grading' };
       return { timeRemaining: next };

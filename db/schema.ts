@@ -42,6 +42,7 @@ export const questions = pgTable('questions', {
   gradeId: uuid('grade_id').references(() => grades.id, { onDelete: 'set null' }),
   difficulty: text('difficulty').default('Medium').notNull(),
   usesCount: integer('uses_count').default(0).notNull(),
+  imageUrl: text('image_url'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

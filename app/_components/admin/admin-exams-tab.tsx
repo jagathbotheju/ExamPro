@@ -13,6 +13,8 @@ import { assignExam } from '@/actions/admin/assignExam';
 import { getStudents } from '@/actions/admin/getStudents';
 import { loadQuestionsFromBank } from '@/actions/admin/loadQuestionsFromBank';
 import { getQuestionPool } from '@/actions/admin/getQuestionPool';
+import { getExamAssignedStudentIds } from '@/actions/admin/getExamAssignedStudentIds';
+import { stripHtml } from '@/app/_components/shared/rich-text-editor';
 import type { PoolQuestion } from '@/actions/admin/getQuestionPool';
 import { getSubjects, getGrades } from '@/actions/admin/manageSubjectsGrades';
 import { getExamDetail } from '@/actions/admin/getExamDetail';
@@ -237,6 +239,35 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
           </button>
         </div>
 
+        {/* Select All row */}
+        {pool.length > 0 && (() => {
+          const allSelected = pool.length > 0 && picked.size === pool.length;
+          const someSelected = picked.size > 0 && picked.size < pool.length;
+          return (
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '7px 10px', marginBottom: 4,
+              background: 'var(--panel-2)', borderRadius: 8,
+              cursor: 'pointer', userSelect: 'none',
+              border: '1px solid var(--border-soft)',
+            }}>
+              <input
+                type="checkbox"
+                checked={allSelected}
+                ref={el => { if (el) el.indeterminate = someSelected; }}
+                onChange={() => setPicked(allSelected ? new Set() : new Set(pool.map(q => q.id)))}
+                style={{ flexShrink: 0 }}
+              />
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                {allSelected ? 'Deselect All' : 'Select All'}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 2 }}>
+                ({pool.length} question{pool.length !== 1 ? 's' : ''})
+              </span>
+            </label>
+          );
+        })()}
+
         {/* Legend */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
           {([
@@ -264,7 +295,7 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
                 <input type="checkbox" checked={picked.has(q.id)} onChange={() => toggle(q.id)} style={{ marginTop: 3, flexShrink: 0 }} />
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: tierColor, flexShrink: 0, marginTop: 5 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>{q.body}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>{stripHtml(q.body)}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3, display: 'flex', gap: 6 }}>
                     <span style={{ color: tierColor, fontWeight: 600 }}>{tierLabel}</span>
                     <span style={{ color: 'var(--text-dim)' }}>·</span>
@@ -298,10 +329,20 @@ function AssignExamDialog({ exam, onClose, onAssigned }: { exam: Exam; onClose: 
     queryKey: ['admin-students-all'],
     queryFn: () => getStudents(1, ''),
   });
+
+  const { data: assignedIds } = useQuery({
+    queryKey: ['exam-assigned-students', exam.id],
+    queryFn: () => getExamAssignedStudentIds(exam.id),
+  });
+  const alreadyAssigned = new Set(assignedIds ?? []);
+
   const students = data?.students ?? [];
   const filtered = search ? students.filter(s => s.name.toLowerCase().includes(search.toLowerCase())) : students;
 
-  const toggle = (id: string) => setPicked(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggle = (id: string) => {
+    if (alreadyAssigned.has(id)) return;
+    setPicked(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
 
   const handleAssign = async () => {
     if (picked.size === 0) return;
@@ -319,19 +360,37 @@ function AssignExamDialog({ exam, onClose, onAssigned }: { exam: Exam; onClose: 
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
           <input className="input" placeholder="Search students…" value={search} onChange={e => setSearch(e.target.value)} />
-          <button className="btn btn-ghost btn-sm" onClick={() => setPicked(new Set(filtered.map(s => s.id)))}>All</button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setPicked(new Set(filtered.filter(s => !alreadyAssigned.has(s.id)).map(s => s.id)))}
+          >All</button>
         </div>
         <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--border-soft)', borderRadius: 10 }}>
-          {filtered.map(s => (
-            <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderBottom: '1px solid var(--border-soft)', cursor: 'pointer', background: picked.has(s.id) ? 'var(--accent-soft)' : 'transparent' }}>
-              <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} />
-              <div className="avatar" style={{ width: 32, height: 32, fontSize: 11 }}>{getInitials(s.name)}</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.grade} · {s.school}</div>
-              </div>
-            </label>
-          ))}
+          {filtered.map(s => {
+            const disabled = alreadyAssigned.has(s.id);
+            return (
+              <label
+                key={s.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: 12,
+                  borderBottom: '1px solid var(--border-soft)',
+                  cursor: disabled ? 'default' : 'pointer',
+                  opacity: disabled ? 0.45 : 1,
+                  background: disabled ? 'transparent' : picked.has(s.id) ? 'var(--accent-soft)' : 'transparent',
+                }}
+              >
+                <input type="checkbox" checked={picked.has(s.id)} disabled={disabled} onChange={() => toggle(s.id)} />
+                <div className="avatar" style={{ width: 32, height: 32, fontSize: 11 }}>{getInitials(s.name)}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.grade} · {s.school}</div>
+                </div>
+                {disabled && (
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>Assigned</span>
+                )}
+              </label>
+            );
+          })}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{picked.size} selected</span>
@@ -404,7 +463,11 @@ function ExamDetailDialog({ exam, onClose }: { exam: Exam; onClose: () => void }
               <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', minWidth: 24, paddingTop: 1 }}>Q{i + 1}</span>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.5, marginBottom: 4 }}>{q.body}</div>
+                  <div
+                    className="rich-text-display"
+                    style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.5, marginBottom: 4 }}
+                    dangerouslySetInnerHTML={{ __html: q.body }}
+                  />
                   <div style={{ display: 'flex', gap: 6 }}>
                     <span style={{ fontSize: 11, color: DIFF_COLORS[q.difficulty] ?? 'var(--text-muted)' }}>{q.difficulty}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>·</span>

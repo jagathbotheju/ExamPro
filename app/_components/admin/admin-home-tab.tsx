@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Users, FileText, Database, BarChart2, ChevronRight, BookOpen, Clock } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Users, FileText, Database, BarChart2, ChevronRight, BookOpen, Clock, Trash2 } from 'lucide-react';
 import { StatTile } from '@/app/_components/shared/stat-tile';
 import { SubjectBlock } from '@/app/_components/shared/subject-block';
 import { PerformanceChart } from '@/app/_components/shared/performance-chart';
@@ -11,20 +11,24 @@ import { getStudents } from '@/actions/admin/getStudents';
 import { getAdminExams } from '@/actions/admin/getExams';
 import { getAdminQuestions } from '@/actions/admin/getQuestions';
 import { getStudentPendingExams, getStudentCompletedExams } from '@/actions/admin/getStudentDetail';
+import { deleteAssignment } from '@/actions/admin/deleteAssignment';
+import { deleteSubmission } from '@/actions/admin/deleteSubmission';
 import { getStudentPerformanceData } from '@/actions/admin/getStudentPerformanceData';
+import { getStudentAllSubjectsPerformanceData } from '@/actions/admin/getStudentAllSubjectsPerformanceData';
 import { getSubjects } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
 import { getGrade, getInitials, formatDate } from '@/app/_lib/utils';
 import type { StudentSummary } from '@/app/_lib/types';
 
 export function AdminHomeTab() {
+  const qc = useQueryClient();
   const [studentPage, setStudentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pPage, setPPage] = useState(1);
   const [cPage, setCPage] = useState(1);
   const [tf, setTf] = useState<'monthly' | 'yearly'>('monthly');
-  const [subjectSlug, setSubjectSlug] = useState('math');
+  const [subjectSlug, setSubjectSlug] = useState('all');
 
   const { data: studentsData } = useQuery({
     queryKey: queryKeys.adminStudents(studentPage, search),
@@ -65,11 +69,27 @@ export function AdminHomeTab() {
   const { data: perfData } = useQuery({
     queryKey: queryKeys.adminStudentPerformance(activeStudentId, subjectSlug),
     queryFn: () => getStudentPerformanceData(activeStudentId, subjectSlug),
-    enabled: !!activeStudentId,
+    enabled: !!activeStudentId && subjectSlug !== 'all',
+  });
+
+  const { data: allPerfData } = useQuery({
+    queryKey: queryKeys.adminStudentAllPerformance(activeStudentId),
+    queryFn: () => getStudentAllSubjectsPerformanceData(activeStudentId),
+    enabled: !!activeStudentId && subjectSlug === 'all',
   });
 
   const subjects = subjectsData ?? [];
   const activeSubject = subjects.find(s => s.slug === subjectSlug);
+
+  const deletePendingMut = useMutation({
+    mutationFn: ({ examId }: { examId: string }) => deleteAssignment(activeStudentId, examId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'student', activeStudentId, 'pending'] }),
+  });
+
+  const deleteCompletedMut = useMutation({
+    mutationFn: ({ submissionId }: { submissionId: string }) => deleteSubmission(submissionId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin', 'student', activeStudentId, 'completed'] }),
+  });
 
   function handleSelectStudent(s: StudentSummary) {
     setSelectedId(s.id);
@@ -202,7 +222,19 @@ export function AdminHomeTab() {
                         </div>
                       </div>
                     </div>
-                    <span className="pill pill-soft">Pending</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className="pill pill-soft">Pending</span>
+                      <button
+                        className="icon-btn"
+                        title="Remove assignment"
+                        onClick={() => {
+                          if (confirm('Remove this exam assignment from the student?'))
+                            deletePendingMut.mutate({ examId: exam.id });
+                        }}
+                      >
+                        <Trash2 size={13} color="var(--red)" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -253,12 +285,24 @@ export function AdminHomeTab() {
                           </div>
                         </div>
                       </div>
-                      <div style={{
-                        fontSize: 15, fontWeight: 700, color,
-                        fontFeatureSettings: '"tnum"',
-                        minWidth: 52, textAlign: 'right',
-                      }}>
-                        {sub.score}%
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{
+                          fontSize: 15, fontWeight: 700, color,
+                          fontFeatureSettings: '"tnum"',
+                          minWidth: 52, textAlign: 'right',
+                        }}>
+                          {sub.score}%
+                        </div>
+                        <button
+                          className="icon-btn"
+                          title="Delete submission"
+                          onClick={() => {
+                            if (confirm('Delete this exam submission? This cannot be undone.'))
+                              deleteCompletedMut.mutate({ submissionId: sub.id });
+                          }}
+                        >
+                          <Trash2 size={13} color="var(--red)" />
+                        </button>
                       </div>
                     </div>
                   );
@@ -285,6 +329,7 @@ export function AdminHomeTab() {
                     value={subjectSlug}
                     onChange={e => setSubjectSlug(e.target.value)}
                   >
+                    <option value="all">All Subjects</option>
                     {subjects.map(s => (
                       <option key={s.slug} value={s.slug}>{s.name}</option>
                     ))}
@@ -296,11 +341,21 @@ export function AdminHomeTab() {
                 </div>
               </div>
             </div>
-            <PerformanceChart
-              data={perfData ?? []}
-              subjectSlug={subjectSlug}
-              subjectColor={activeSubject?.color ?? 'var(--accent)'}
-            />
+            {subjectSlug === 'all' ? (
+              <PerformanceChart
+                data={[]}
+                subjectSlug="all"
+                subjectColor="var(--accent)"
+                multiData={allPerfData ?? []}
+                allSubjects={subjects}
+              />
+            ) : (
+              <PerformanceChart
+                data={perfData ?? []}
+                subjectSlug={subjectSlug}
+                subjectColor={activeSubject?.color ?? 'var(--accent)'}
+              />
+            )}
           </div>
         </>
       )}
