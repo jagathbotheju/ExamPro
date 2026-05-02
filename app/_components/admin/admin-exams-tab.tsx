@@ -150,6 +150,7 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [newOnly, setNewOnly] = useState(false);
 
   const { data: poolData } = useQuery({
     queryKey: ['bank-pool', subjectId, gradeId],
@@ -157,6 +158,7 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
     enabled: !!(subjectId && gradeId),
   });
   const pool: PoolQuestion[] = poolData ?? [];
+  const visiblePool = newOnly ? pool.filter(q => q.tier === 'unused') : pool;
 
   const toggle = (id: string) => setPicked(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
@@ -239,32 +241,52 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
           </button>
         </div>
 
-        {/* Select All row */}
+        {/* Select All + New Only row */}
         {pool.length > 0 && (() => {
-          const allSelected = pool.length > 0 && picked.size === pool.length;
-          const someSelected = picked.size > 0 && picked.size < pool.length;
+          const allSelected = visiblePool.length > 0 && visiblePool.every(q => picked.has(q.id));
+          const someSelected = visiblePool.some(q => picked.has(q.id)) && !allSelected;
+          const newCount = pool.filter(q => q.tier === 'unused').length;
           return (
-            <label style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '7px 10px', marginBottom: 4,
-              background: 'var(--panel-2)', borderRadius: 8,
-              cursor: 'pointer', userSelect: 'none',
-              border: '1px solid var(--border-soft)',
-            }}>
-              <input
-                type="checkbox"
-                checked={allSelected}
-                ref={el => { if (el) el.indeterminate = someSelected; }}
-                onChange={() => setPicked(allSelected ? new Set() : new Set(pool.map(q => q.id)))}
-                style={{ flexShrink: 0 }}
-              />
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
-                {allSelected ? 'Deselect All' : 'Select All'}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 2 }}>
-                ({pool.length} question{pool.length !== 1 ? 's' : ''})
-              </span>
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <label style={{
+                flex: 1, display: 'flex', alignItems: 'center', gap: 10,
+                padding: '7px 10px',
+                background: 'var(--panel-2)', borderRadius: 8,
+                cursor: 'pointer', userSelect: 'none',
+                border: '1px solid var(--border-soft)',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = someSelected; }}
+                  onChange={() => setPicked(allSelected ? new Set() : new Set(visiblePool.map(q => q.id)))}
+                  style={{ flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>
+                  {allSelected ? 'Deselect All' : 'Select All'}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-dim)', marginLeft: 2 }}>
+                  ({visiblePool.length} question{visiblePool.length !== 1 ? 's' : ''})
+                </span>
+              </label>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '7px 10px',
+                background: newOnly ? 'rgba(45,212,191,0.08)' : 'var(--panel-2)', borderRadius: 8,
+                cursor: 'pointer', userSelect: 'none',
+                border: `1px solid ${newOnly ? 'var(--green)' : 'var(--border-soft)'}`,
+                whiteSpace: 'nowrap',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={newOnly}
+                  onChange={e => setNewOnly(e.target.checked)}
+                  style={{ flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 12, fontWeight: 600, color: newOnly ? 'var(--green)' : 'var(--text-muted)' }}>New only</span>
+                <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>({newCount})</span>
+              </label>
+            </div>
           );
         })()}
 
@@ -283,11 +305,11 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
         </div>
 
         <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--border-soft)', borderRadius: 10, padding: 8, marginBottom: 14 }}>
-          {pool.length === 0 ? (
+          {visiblePool.length === 0 ? (
             <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              No questions in bank for this subject + grade.
+              {pool.length === 0 ? 'No questions in bank for this subject + grade.' : 'No new questions available.'}
             </div>
-          ) : pool.map(q => {
+          ) : visiblePool.map(q => {
             const tierColor = q.tier === 'unused' ? 'var(--green)' : q.tier === 'incorrect' ? 'var(--amber)' : 'var(--text-dim)';
             const tierLabel = q.tier === 'unused' ? 'New' : q.tier === 'incorrect' ? 'Needs Review' : 'Used';
             return (
