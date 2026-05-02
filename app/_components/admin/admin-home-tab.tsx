@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, FileText, Database, BarChart2, ChevronRight, BookOpen, Clock, Trash2 } from 'lucide-react';
+import { ToggleGroup, ToggleGroupItem } from '@/app/_components/ui/toggle-group';
 import { StatTile } from '@/app/_components/shared/stat-tile';
 import { SubjectBlock } from '@/app/_components/shared/subject-block';
 import { PerformanceChart } from '@/app/_components/shared/performance-chart';
@@ -13,22 +14,29 @@ import { getAdminQuestions } from '@/actions/admin/getQuestions';
 import { getStudentPendingExams, getStudentCompletedExams } from '@/actions/admin/getStudentDetail';
 import { deleteAssignment } from '@/actions/admin/deleteAssignment';
 import { deleteSubmission } from '@/actions/admin/deleteSubmission';
-import { getStudentPerformanceData } from '@/actions/admin/getStudentPerformanceData';
 import { getStudentAllSubjectsPerformanceData } from '@/actions/admin/getStudentAllSubjectsPerformanceData';
+import { getStudentPerformanceYears } from '@/actions/admin/getStudentPerformanceYears';
 import { getSubjects } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
 import { getGrade, getInitials, formatDate } from '@/app/_lib/utils';
 import type { StudentSummary } from '@/app/_lib/types';
 
+const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
 export function AdminHomeTab() {
   const qc = useQueryClient();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
   const [studentPage, setStudentPage] = useState(1);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pPage, setPPage] = useState(1);
   const [cPage, setCPage] = useState(1);
   const [tf, setTf] = useState<'monthly' | 'yearly'>('monthly');
-  const [subjectSlug, setSubjectSlug] = useState('all');
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
 
   const { data: studentsData } = useQuery({
     queryKey: queryKeys.adminStudents(studentPage, search),
@@ -66,20 +74,27 @@ export function AdminHomeTab() {
     enabled: !!activeStudentId,
   });
 
-  const { data: perfData } = useQuery({
-    queryKey: queryKeys.adminStudentPerformance(activeStudentId, subjectSlug),
-    queryFn: () => getStudentPerformanceData(activeStudentId, subjectSlug),
-    enabled: !!activeStudentId && subjectSlug !== 'all',
+  const { data: availableYears = [] } = useQuery({
+    queryKey: queryKeys.adminStudentPerformanceYears(activeStudentId),
+    queryFn: () => getStudentPerformanceYears(activeStudentId),
+    enabled: !!activeStudentId,
   });
 
-  const { data: allPerfData } = useQuery({
-    queryKey: queryKeys.adminStudentAllPerformance(activeStudentId),
-    queryFn: () => getStudentAllSubjectsPerformanceData(activeStudentId),
-    enabled: !!activeStudentId && subjectSlug === 'all',
+  // Ensure selectedYear is a valid available year once data loads
+  const yearOptions = availableYears.length > 0 ? availableYears : [currentYear];
+  useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+      setSelectedYear(availableYears[availableYears.length - 1]);
+    }
+  }, [availableYears, selectedYear]);
+
+  const { data: chartData = [] } = useQuery({
+    queryKey: queryKeys.adminStudentAllPerformance(activeStudentId, tf, selectedYear, tf === 'monthly' ? selectedMonth : undefined),
+    queryFn: () => getStudentAllSubjectsPerformanceData(activeStudentId, tf, selectedYear, tf === 'monthly' ? selectedMonth : 0),
+    enabled: !!activeStudentId,
   });
 
   const subjects = subjectsData ?? [];
-  const activeSubject = subjects.find(s => s.slug === subjectSlug);
 
   const deletePendingMut = useMutation({
     mutationFn: ({ examId }: { examId: string }) => deleteAssignment(activeStudentId, examId),
@@ -95,6 +110,10 @@ export function AdminHomeTab() {
     setSelectedId(s.id);
     setPPage(1);
     setCPage(1);
+    // Reset chart filters when selecting a new student
+    setSelectedYear(currentYear);
+    setSelectedMonth(currentMonth);
+    setTf('monthly');
   }
 
   return (
@@ -106,10 +125,10 @@ export function AdminHomeTab() {
 
       {/* Stats */}
       <div className="grid-4">
-        <StatTile icon={Users}    iconColor="var(--accent)" label="Total Students"  value={studentsData?.total ?? 0}  trend="registered" />
-        <StatTile icon={FileText} iconColor="var(--cyan)"   label="Active Exams"   value={examsData?.exams.filter(e => e.status === 'published').length ?? 0} trend="published" />
-        <StatTile icon={Database} iconColor="var(--green)"  label="Questions"      value={questionsData?.total ?? 0} trend="in bank" />
-        <StatTile icon={BarChart2}iconColor="var(--amber)"  label="Avg Score"      value="—" trend="platform-wide" />
+        <StatTile icon={Users} iconColor="var(--accent)" label="Total Students" value={studentsData?.total ?? 0} trend="registered" />
+        <StatTile icon={FileText} iconColor="var(--cyan)" label="Active Exams" value={examsData?.exams.filter(e => e.status === 'published').length ?? 0} trend="published" />
+        <StatTile icon={Database} iconColor="var(--green)" label="Questions" value={questionsData?.total ?? 0} trend="in bank" />
+        <StatTile icon={BarChart2} iconColor="var(--amber)" label="Avg Score" value={selectedStudent ? `${selectedStudent.avgScore}%` : '—'} trend={selectedStudent ? selectedStudent.name.split(' ')[0] : 'platform-wide'} />
       </div>
 
       {/* Students list */}
@@ -316,46 +335,48 @@ export function AdminHomeTab() {
 
           {/* Results chart */}
           <div className="card">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
-              <div className="card-title" style={{ margin: 0 }}>
+            <div className="flex items-center justify-between mb-[18px] flex-wrap gap-[10px]">
+              <div className="card-title m-0">
                 <BarChart2 size={15} /> Results — {selectedStudent.name.split(' ')[0]}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {/* Subject selector */}
-                {subjects.length > 0 && (
+              <div className="flex flex-row items-center gap-[10px]  p-2">
+                {/* Monthly / Yearly toggle */}
+                <ToggleGroup
+                  variant='outline'
+                  value={[tf]}
+                  onValueChange={(vals) => vals.length > 0 && setTf(vals[0] as 'monthly' | 'yearly')}
+                  className='border-primary border'
+                >
+                  <ToggleGroupItem value="monthly" className={tf === 'monthly' ? 'bg-primary!' : ''}>Month</ToggleGroupItem>
+                  <ToggleGroupItem value="yearly" className={tf === 'yearly' ? 'bg-primary!' : ''}>Year</ToggleGroupItem>
+                </ToggleGroup>
+
+                {/* Month selector — monthly mode only */}
+                {tf === 'monthly' && (
                   <select
-                    className="input"
-                    style={{ height: 32, fontSize: 12, padding: '0 10px', minWidth: 120 }}
-                    value={subjectSlug}
-                    onChange={e => setSubjectSlug(e.target.value)}
+                    className="input h-8 text-xs px-[10px] min-w-[120px]"
+                    value={selectedMonth}
+                    onChange={e => setSelectedMonth(Number(e.target.value))}
                   >
-                    <option value="all">All Subjects</option>
-                    {subjects.map(s => (
-                      <option key={s.slug} value={s.slug}>{s.name}</option>
+                    {MONTHS_FULL.map((m, i) => (
+                      <option key={i} value={i}>{m}</option>
                     ))}
                   </select>
                 )}
-                <div className="seg">
-                  <button className={`seg-btn ${tf === 'monthly' ? 'active' : ''}`} onClick={() => setTf('monthly')}>Monthly</button>
-                  <button className={`seg-btn ${tf === 'yearly' ? 'active' : ''}`} onClick={() => setTf('yearly')}>Yearly</button>
-                </div>
+                {/* Year selector */}
+                <select
+                  className="input h-8 text-xs px-[10px] min-w-[90px]"
+                  value={selectedYear}
+                  onChange={e => setSelectedYear(Number(e.target.value))}
+                >
+                  {yearOptions.map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+
               </div>
             </div>
-            {subjectSlug === 'all' ? (
-              <PerformanceChart
-                data={[]}
-                subjectSlug="all"
-                subjectColor="var(--accent)"
-                multiData={allPerfData ?? []}
-                allSubjects={subjects}
-              />
-            ) : (
-              <PerformanceChart
-                data={perfData ?? []}
-                subjectSlug={subjectSlug}
-                subjectColor={activeSubject?.color ?? 'var(--accent)'}
-              />
-            )}
+            <PerformanceChart multiData={chartData} allSubjects={subjects} />
           </div>
         </>
       )}

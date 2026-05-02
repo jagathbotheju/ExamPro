@@ -1,0 +1,1 @@
+ALTER TABLE "student_profiles" ADD COLUMN "last_study_date" date;

@@ -100,6 +100,28 @@ export async function submitExam({ examId, answers, timeSpentSeconds }: SubmitEx
       eq(examAssignments.studentId, profile.id),
     ));
 
+  // Update study streak
+  const todayStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const lastStr = profile.lastStudyDate ?? null;
+
+  let newStreak: number;
+  if (lastStr === todayStr) {
+    newStreak = profile.studyStreak; // already studied today
+  } else if (lastStr) {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().slice(0, 10);
+    newStreak = lastStr === yesterdayStr ? profile.studyStreak + 1 : 1;
+  } else {
+    newStreak = 1;
+  }
+
+  const newBest = Math.max(newStreak, profile.bestStreak);
+
+  await db.update(studentProfiles)
+    .set({ studyStreak: newStreak, bestStreak: newBest, lastStudyDate: todayStr })
+    .where(eq(studentProfiles.id, profile.id));
+
   revalidatePath('/dashboard');
   return { submissionId: submission.id, score };
 }

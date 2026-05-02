@@ -13,6 +13,7 @@ export const studentProfiles = pgTable('student_profiles', {
   isComplete: boolean('is_complete').default(false).notNull(),
   studyStreak: integer('study_streak').default(0).notNull(),
   bestStreak: integer('best_streak').default(0).notNull(),
+  lastStudyDate: date('last_study_date'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
