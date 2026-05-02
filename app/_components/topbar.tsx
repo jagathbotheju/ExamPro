@@ -15,9 +15,9 @@ export default function Topbar({ profile, onProfileClick }: TopbarProps) {
         <strong>{profile.shortName}</strong> · {profile.grade}
       </div>
       <div className="topbar-actions">
-        <button className="icon-btn">
+        {/* <button className="icon-btn">
           <Icon name="fa-magnifying-glass" />
-        </button>
+        </button> */}
         <button className="icon-btn">
           <Icon name="fa-bell" />
           <span className="dot" />

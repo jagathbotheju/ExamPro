@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, Clock, Target, Flame, ChevronRight, BarChart2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { ToggleGroup, ToggleGroupItem } from '@/app/_components/ui/toggle-group';
 import { ScoreRing } from '@/app/_components/shared/score-ring';
 import { StatTile } from '@/app/_components/shared/stat-tile';
 import { PerformanceChart } from '@/app/_components/shared/performance-chart';
@@ -12,17 +13,24 @@ import { PendingExamRow, CompletedExamRow } from '@/app/_components/shared/exam-
 import { getInitials } from '@/app/_lib/utils';
 import { getPendingExams } from '@/actions/student/getPendingExams';
 import { getCompletedExams } from '@/actions/student/getCompletedExams';
-import { getPerformanceData, getAllSubjectsPerformanceData } from '@/actions/student/getPerformanceData';
+import { getAllSubjectsPerformanceData, getPerformanceYears } from '@/actions/student/getPerformanceData';
 import { getSubjects } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
 import type { StudentProfile } from '@/app/_lib/types';
+
+const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 interface HomeTabProps { profile: StudentProfile | null }
 
 export function HomeTab({ profile }: HomeTabProps) {
   const router = useRouter();
-  const [subjectSlug, setSubjectSlug] = useState('math');
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
   const [tf, setTf] = useState<'monthly' | 'yearly'>('monthly');
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
 
   const { data: pending = [] } = useQuery({
     queryKey: queryKeys.pendingExams(),
@@ -36,17 +44,22 @@ export function HomeTab({ profile }: HomeTabProps) {
     queryKey: queryKeys.subjects(),
     queryFn: getSubjects,
   });
-  const isAll = subjectSlug === 'all';
-
-  const { data: performanceData = [] } = useQuery({
-    queryKey: queryKeys.performanceData(subjectSlug, tf),
-    queryFn: () => getPerformanceData(subjectSlug, tf),
-    enabled: !isAll,
+  const { data: availableYears = [] } = useQuery({
+    queryKey: queryKeys.performanceYears(),
+    queryFn: getPerformanceYears,
   });
-  const { data: multiPerformanceData = [] } = useQuery({
-    queryKey: ['student', 'performance', 'all', tf],
-    queryFn: () => getAllSubjectsPerformanceData(tf),
-    enabled: isAll,
+
+  // Ensure selectedYear is a valid available year once data loads
+  const yearOptions = availableYears.length > 0 ? availableYears : [currentYear];
+  useEffect(() => {
+    if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+      setSelectedYear(availableYears[availableYears.length - 1]);
+    }
+  }, [availableYears, selectedYear]);
+
+  const { data: chartData = [] } = useQuery({
+    queryKey: queryKeys.allPerformanceData(tf, selectedYear, tf === 'monthly' ? selectedMonth : undefined),
+    queryFn: () => getAllSubjectsPerformanceData(tf, selectedYear, tf === 'monthly' ? selectedMonth : 0),
   });
 
   const avgScore = completed.length
@@ -55,12 +68,6 @@ export function HomeTab({ profile }: HomeTabProps) {
   const initials = profile ? getInitials(profile.name) : '?';
   const firstName = profile?.name?.split(' ')[0] ?? 'Student';
   const rank = avgScore >= 90 ? 'Gold' : avgScore >= 75 ? 'Silver' : 'Bronze';
-
-  const activeSubject = subjects.find(s => s.slug === subjectSlug);
-
-  // Default to first DB subject if 'math' not found
-  const resolvedSlug = activeSubject ? subjectSlug : (subjects[0]?.slug ?? 'math');
-  const resolvedSubject = activeSubject ?? subjects[0];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -98,8 +105,6 @@ export function HomeTab({ profile }: HomeTabProps) {
         <StatTile icon={Target} iconColor="var(--cyan)" label="Avg Accuracy" value={`${avgScore}%`} trend="all exams" />
         <StatTile icon={Flame} iconColor="var(--accent)" label="Study Streak" value={profile?.studyStreak ?? 0} trend={`Best: ${profile?.bestStreak ?? 0}`} />
       </div>
-
-
 
       {/* Pending Exams */}
       <div className="card">
@@ -145,33 +150,43 @@ export function HomeTab({ profile }: HomeTabProps) {
           <div className="card-title" style={{ margin: 0 }}>
             <BarChart2 size={15} /> Performance Analytics
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {subjects.length > 0 && (
+          <div className="flex flex-row items-center gap-[10px]  p-2">
+            {/* Monthly / Yearly toggle */}
+            <ToggleGroup
+              value={[tf]}
+              onValueChange={(vals) => vals.length > 0 && setTf(vals[0] as 'monthly' | 'yearly')}
+              className='border-primary border'
+            >
+              <ToggleGroupItem value="monthly" className={tf === 'monthly' ? 'bg-primary!' : ''} >Monthly</ToggleGroupItem>
+              <ToggleGroupItem value="yearly" className={tf === 'yearly' ? 'bg-primary!' : ''}>Yearly</ToggleGroupItem>
+            </ToggleGroup>
+
+            {/* Month selector — monthly mode only */}
+            {tf === 'monthly' && (
               <select
-                className="input"
-                style={{ height: 32, fontSize: 12, padding: '0 10px', minWidth: 130 }}
-                value={isAll ? 'all' : resolvedSlug}
-                onChange={e => setSubjectSlug(e.target.value)}
+                className="input h-8 text-xs px-[10px] min-w-[120px]"
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(Number(e.target.value))}
               >
-                <option value="all">All Subjects</option>
-                {subjects.map(s => (
-                  <option key={s.slug} value={s.slug}>{s.name}</option>
+                {MONTHS_FULL.map((m, i) => (
+                  <option key={i} value={i}>{m}</option>
                 ))}
               </select>
             )}
-            <div className="seg">
-              <button className={`seg-btn ${tf === 'monthly' ? 'active' : ''}`} onClick={() => setTf('monthly')}>Monthly</button>
-              <button className={`seg-btn ${tf === 'yearly' ? 'active' : ''}`} onClick={() => setTf('yearly')}>Yearly</button>
-            </div>
+            {/* Year selector */}
+            <select
+              className="input h-8 text-xs px-[10px] min-w-[90px]"
+              value={selectedYear}
+              onChange={e => setSelectedYear(Number(e.target.value))}
+            >
+              {yearOptions.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+
           </div>
         </div>
-        <PerformanceChart
-          data={performanceData}
-          subjectSlug={resolvedSlug}
-          subjectColor={resolvedSubject?.color ?? 'var(--accent)'}
-          multiData={isAll ? multiPerformanceData : undefined}
-          allSubjects={isAll ? subjects : undefined}
-        />
+        <PerformanceChart multiData={chartData} allSubjects={subjects} />
       </div>
     </div>
   );

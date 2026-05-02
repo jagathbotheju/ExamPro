@@ -2,17 +2,44 @@
 
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/db';
-import { examSubmissions, studentProfiles, exams, subjects } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { examSubmissions, studentProfiles, exams } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 export type MultiPerformancePoint = {
-  month: string;
-  monthIndex: number;
+  month: string;       // x-axis label: day number (monthly mode) or month abbr (yearly mode)
+  monthIndex: number;  // day number (monthly) or month index 0-11 (yearly)
   [slug: string]: string | number;
 };
 
+export interface PerformancePoint {
+  month: string;
+  monthIndex: number;
+  score: number;
+  count: number;
+}
+
+export async function getPerformanceYears(): Promise<number[]> {
+  const { userId } = await auth();
+  if (!userId) return [];
+
+  const profile = await db.query.studentProfiles.findFirst({
+    where: eq(studentProfiles.userId, userId),
+  });
+  if (!profile) return [];
+
+  const rows = await db
+    .select({ submittedAt: examSubmissions.submittedAt })
+    .from(examSubmissions)
+    .where(eq(examSubmissions.studentId, profile.id));
+
+  const years = [...new Set(rows.map(r => new Date(r.submittedAt).getFullYear()))].sort((a, b) => a - b);
+  return years;
+}
+
 export async function getAllSubjectsPerformanceData(
-  timeframe: 'monthly' | 'yearly' = 'monthly',
+  mode: 'monthly' | 'yearly',
+  year: number,
+  month = 0,
 ): Promise<MultiPerformancePoint[]> {
   const { userId } = await auth();
   if (!userId) return [];
@@ -37,131 +64,48 @@ export async function getAllSubjectsPerformanceData(
 
   const subjectByIdMap = new Map(allSubjects.map(s => [s.id, s.slug]));
 
-  if (timeframe === 'yearly') {
-    const buckets: Record<number, Record<string, { total: number; count: number }>> = {};
+  if (mode === 'monthly') {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const buckets: Record<number, Record<string, number>> = {};
+    for (let d = 1; d <= daysInMonth; d++) buckets[d] = {};
+
     for (const row of rows) {
-      const y = new Date(row.submittedAt).getFullYear();
+      const d = new Date(row.submittedAt);
+      if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+      const day = d.getDate();
       const slug = subjectByIdMap.get(row.subjectId ?? '') ?? 'unknown';
-      if (!buckets[y]) buckets[y] = {};
-      if (!buckets[y][slug]) buckets[y][slug] = { total: 0, count: 0 };
-      buckets[y][slug].total += row.score;
-      buckets[y][slug].count += 1;
+      buckets[day][slug] = Math.max(buckets[day][slug] ?? 0, row.score);
     }
-    return Object.entries(buckets)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([yr, slugBuckets]) => {
-        const point: MultiPerformancePoint = { month: yr, monthIndex: Number(yr) };
-        for (const [slug, b] of Object.entries(slugBuckets)) {
-          point[slug] = b.count > 0 ? Math.round(b.total / b.count) : 0;
-        }
-        return point;
-      });
+
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = i + 1;
+      const point: MultiPerformancePoint = { month: String(day), monthIndex: day };
+      for (const [slug, maxScore] of Object.entries(buckets[day])) {
+        point[slug] = maxScore;
+      }
+      return point;
+    });
   }
 
-  const year = new Date().getFullYear();
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const buckets: Record<number, Record<string, { total: number; count: number }>> = {};
-  for (let i = 0; i < 12; i++) buckets[i] = {};
+  // yearly: bucket by month, max score — always emit all 12 months
+  const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  const buckets: Record<number, Record<string, number>> = {};
+  for (let m = 0; m < 12; m++) buckets[m] = {};
 
   for (const row of rows) {
     const d = new Date(row.submittedAt);
     if (d.getFullYear() !== year) continue;
     const m = d.getMonth();
     const slug = subjectByIdMap.get(row.subjectId ?? '') ?? 'unknown';
-    if (!buckets[m][slug]) buckets[m][slug] = { total: 0, count: 0 };
-    buckets[m][slug].total += row.score;
-    buckets[m][slug].count += 1;
+    buckets[m][slug] = Math.max(buckets[m][slug] ?? 0, row.score);
   }
 
-  const points: MultiPerformancePoint[] = [];
-  for (let i = 0; i < 12; i++) {
-    const slugBuckets = buckets[i];
-    if (Object.keys(slugBuckets).length === 0) continue;
-    const point: MultiPerformancePoint = { month: MONTHS[i], monthIndex: i };
-    for (const [slug, b] of Object.entries(slugBuckets)) {
-      point[slug] = b.count > 0 ? Math.round(b.total / b.count) : 0;
+  return MONTHS.map((label, mi) => {
+    const point: MultiPerformancePoint = { month: label, monthIndex: mi };
+    for (const [slug, maxScore] of Object.entries(buckets[mi])) {
+      point[slug] = maxScore;
     }
-    points.push(point);
-  }
-  return points;
+    return point;
+  });
 }
 
-export interface PerformancePoint {
-  month: string;      // 'Jan'…'Dec' for monthly, '2023'…'2026' for yearly
-  monthIndex: number; // 0–11 (monthly) or full year (yearly)
-  score: number;      // avg score
-  count: number;      // exams taken
-}
-
-export async function getPerformanceData(
-  subjectSlug: string,
-  timeframe: 'monthly' | 'yearly' = 'monthly',
-): Promise<PerformancePoint[]> {
-  const { userId } = await auth();
-  if (!userId) return [];
-
-  const profile = await db.query.studentProfiles.findFirst({
-    where: eq(studentProfiles.userId, userId),
-  });
-  if (!profile) return [];
-
-  const subject = await db.query.subjects.findFirst({
-    where: eq(subjects.slug, subjectSlug),
-  });
-  if (!subject) return [];
-
-  const rows = await db
-    .select({ score: examSubmissions.score, submittedAt: examSubmissions.submittedAt })
-    .from(examSubmissions)
-    .innerJoin(exams, eq(exams.id, examSubmissions.examId))
-    .where(
-      and(
-        eq(examSubmissions.studentId, profile.id),
-        eq(exams.subjectId, subject.id),
-      )
-    );
-
-  if (timeframe === 'yearly') {
-    const buckets: Record<number, { total: number; count: number }> = {};
-    for (const row of rows) {
-      const y = new Date(row.submittedAt).getFullYear();
-      if (!buckets[y]) buckets[y] = { total: 0, count: 0 };
-      buckets[y].total += row.score;
-      buckets[y].count += 1;
-    }
-    return Object.entries(buckets)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([yr, b]) => ({
-        month: yr,
-        monthIndex: Number(yr),
-        score: Math.round(b.total / b.count),
-        count: b.count,
-      }));
-  }
-
-  // monthly — current year only
-  const year = new Date().getFullYear();
-  const start = new Date(`${year}-01-01T00:00:00.000Z`);
-  const end   = new Date(`${year}-12-31T23:59:59.999Z`);
-  const yearRows = rows.filter(r => {
-    const d = new Date(r.submittedAt);
-    return d >= start && d <= end;
-  });
-
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const buckets: { total: number; count: number }[] = Array.from({ length: 12 }, () => ({ total: 0, count: 0 }));
-  for (const row of yearRows) {
-    const m = new Date(row.submittedAt).getMonth();
-    buckets[m].total += row.score;
-    buckets[m].count += 1;
-  }
-
-  return buckets
-    .map((b, i) => ({
-      month: MONTHS[i],
-      monthIndex: i,
-      score: b.count > 0 ? Math.round(b.total / b.count) : 0,
-      count: b.count,
-    }))
-    .filter(p => p.count > 0);
-}
