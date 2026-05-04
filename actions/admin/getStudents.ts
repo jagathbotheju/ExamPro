@@ -1,6 +1,6 @@
 'use server';
 
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { auth, currentUser, clerkClient } from '@clerk/nextjs/server';
 import { db } from '@/db';
 import { studentProfiles, examAssignments, examSubmissions } from '@/db/schema';
 import { eq, count, avg, sql, ilike, or } from 'drizzle-orm';
@@ -14,16 +14,26 @@ export async function getStudents(page = 1, search = ''): Promise<{ students: St
   const _user = await currentUser();
   if (_user?.publicMetadata?.role !== 'admin') throw new Error('Forbidden');
 
+  const client = await clerkClient();
+  const { data: clerkUsers } = await client.users.getUserList({ limit: 500 });
+  const adminUserIds = new Set(
+    clerkUsers
+      .filter(u => u.publicMetadata?.role === 'admin')
+      .map(u => u.id)
+  );
+
   const allProfiles = await db.query.studentProfiles.findMany({
     orderBy: (p, { asc }) => [asc(p.name)],
   });
 
+  const nonAdminProfiles = allProfiles.filter(p => !adminUserIds.has(p.userId));
+
   const filtered = search
-    ? allProfiles.filter(p =>
+    ? nonAdminProfiles.filter(p =>
         p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.school ?? '').toLowerCase().includes(search.toLowerCase())
       )
-    : allProfiles;
+    : nonAdminProfiles;
 
   const total = filtered.length;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));

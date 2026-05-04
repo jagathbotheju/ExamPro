@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { CheckCircle2, XCircle, Clock, ArrowLeft } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, ArrowLeft, Printer } from 'lucide-react';
 import { ScoreRing } from '@/app/_components/shared/score-ring';
 import { getGrade, formatTime } from '@/app/_lib/utils';
 import type { ExamResult } from '@/app/_lib/types';
 
-interface ExamResultsProps { result: ExamResult }
+interface ExamResultsProps { result: ExamResult; backHref?: string }
 
-export function ExamResults({ result }: ExamResultsProps) {
+export function ExamResults({ result, backHref = '/dashboard' }: ExamResultsProps) {
   const { submission, exam, questions } = result;
   const { grade, label, color } = getGrade(submission.score);
   const wrong = submission.totalQuestions - submission.correctCount;
@@ -18,22 +18,80 @@ export function ExamResults({ result }: ExamResultsProps) {
       minHeight: '100vh', background: 'var(--bg)',
       display: 'flex', flexDirection: 'column', overflow: 'auto',
     }}>
+      <style>{`
+        @media print {
+          body { background: #fff !important; color: #111 !important; font-family: Inter, sans-serif; }
+          .no-print { display: none !important; }
+          .print-root { min-height: unset !important; background: #fff !important; }
+          .print-content { padding: 24px !important; max-width: 100% !important; }
+          .print-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 12px; }
+          .print-header h1 { font-size: 20px; font-weight: 700; margin: 0; color: #111; }
+          .print-header span { font-size: 13px; color: #666; }
+          .card, .card-hero {
+            background: #f9f9f9 !important;
+            border: 1px solid #ddd !important;
+            border-radius: 10px !important;
+            break-inside: avoid;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .opt { border: 1px solid #ddd !important; background: #fff !important; }
+          .opt.correct { background: #e6faf6 !important; border-color: #2dd4bf !important; }
+          .opt.wrong { background: #fdecea !important; border-color: #e63946 !important; }
+          .opt-letter { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .pill-green { background: rgba(45,212,191,0.15) !important; color: #0d9488 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          .pill-red { background: rgba(230,57,70,0.15) !important; color: #c0151f !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+      `}</style>
+
       {/* Top bar */}
-      <div style={{
+      <div className="no-print" style={{
         padding: '16px 28px', background: 'var(--panel)',
         borderBottom: '1px solid var(--border-soft)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
         <div style={{ fontSize: 16, fontWeight: 700 }}>{exam.name} — Results</div>
-        <Link href="/dashboard" className="btn btn-ghost btn-sm">
+        <Link href={backHref} className="btn btn-ghost btn-sm">
           <ArrowLeft size={14} /> Back to Dashboard
         </Link>
       </div>
 
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '32px 24px', width: '100%' }}>
+      <div className="print-content" style={{ maxWidth: 800, margin: '0 auto', padding: '32px 24px', width: '100%' }}>
+        {/* Print-only header */}
+        <div className="print-header" style={{ display: 'none' }}>
+          <h1>{exam.name}</h1>
+          <span>Exam Results</span>
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: '#999' }}>
+            Printed on {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+          </span>
+        </div>
+
         {/* Summary */}
-        <div className="card card-hero" style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 32, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <div className="card card-hero" style={{ marginBottom: 24, position: 'relative' }}>
+          <button
+            className="no-print"
+            onClick={() => window.print()}
+            style={{
+              position: 'absolute', top: 14, left: 16,
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)',
+              background: 'var(--panel-2)', color: 'var(--text-muted)',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              transition: 'color 0.15s, border-color 0.15s',
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
+              (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            }}
+          >
+            <Printer size={13} /> Print / Save PDF
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 32, flexWrap: 'wrap', justifyContent: 'center', paddingTop: 8 }}>
             <ScoreRing score={submission.score} size={130} />
             <div>
               <div style={{ fontSize: 32, fontWeight: 800, color, letterSpacing: '-0.02em', lineHeight: 1, marginBottom: 6 }}>
@@ -103,8 +161,8 @@ export function ExamResults({ result }: ExamResultsProps) {
           })}
         </div>
 
-        <div style={{ marginTop: 32, display: 'flex', justifyContent: 'center' }}>
-          <Link href="/dashboard" className="btn btn-primary btn-lg">
+        <div className="no-print" style={{ marginTop: 32, display: 'flex', justifyContent: 'center' }}>
+          <Link href={backHref} className="btn btn-primary btn-lg">
             <ArrowLeft size={16} /> Back to Dashboard
           </Link>
         </div>

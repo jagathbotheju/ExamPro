@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, FileText, Database, BarChart2, ChevronRight, BookOpen, Clock, Trash2 } from 'lucide-react';
+import { Users, FileText, Database, BarChart2, ChevronRight, BookOpen, Clock, Trash2, Eye } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/app/_components/ui/toggle-group';
 import { StatTile } from '@/app/_components/shared/stat-tile';
 import { SubjectBlock } from '@/app/_components/shared/subject-block';
@@ -18,13 +19,14 @@ import { getStudentAllSubjectsPerformanceData } from '@/actions/admin/getStudent
 import { getStudentPerformanceYears } from '@/actions/admin/getStudentPerformanceYears';
 import { getSubjects } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
-import { getGrade, getInitials, formatDate } from '@/app/_lib/utils';
+import { getGrade, getInitials, formatDate, formatTime } from '@/app/_lib/utils';
 import type { StudentSummary } from '@/app/_lib/types';
 
 const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export function AdminHomeTab() {
   const qc = useQueryClient();
+  const router = useRouter();
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
@@ -300,6 +302,12 @@ export function AdminHomeTab() {
                             <span style={{ color: 'var(--text-dim)' }}>·</span>
                             <span>{sub.correctCount}/{sub.totalQuestions} correct</span>
                             <span style={{ color: 'var(--text-dim)' }}>·</span>
+                            {sub.timeSpentSeconds != null && (
+                              <>
+                                <span>{formatTime(sub.timeSpentSeconds)}</span>
+                                <span style={{ color: 'var(--text-dim)' }}>·</span>
+                              </>
+                            )}
                             <span>{formatDate(sub.submittedAt)}</span>
                           </div>
                         </div>
@@ -312,6 +320,12 @@ export function AdminHomeTab() {
                         }}>
                           {sub.score}%
                         </div>
+                        <button
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => router.push(`/admin/results/${sub.id}`)}
+                        >
+                          <Eye size={12} /> View
+                        </button>
                         <button
                           className="icon-btn"
                           title="Delete submission"
