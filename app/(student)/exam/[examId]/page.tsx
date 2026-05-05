@@ -13,6 +13,7 @@ export default async function ExamPage({ params }: { params: Promise<{ examId: s
   if (!data) {
     redirect('/dashboard');
   }
+  console.log('active exam page')
 
   return <ActiveExam exam={data.exam} questions={data.questions} />;
 }
