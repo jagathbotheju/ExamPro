@@ -293,9 +293,9 @@ function CreateExamDialog({ subjects, grades, onClose, onCreate }: {
         {/* Legend */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
           {([
-            { tier: 'unused',    label: 'New',       color: 'var(--green)'  },
+            { tier: 'unused', label: 'New', color: 'var(--green)' },
             { tier: 'incorrect', label: 'Needs Review', color: 'var(--amber)' },
-            { tier: 'other',     label: 'Used',      color: 'var(--text-dim)' },
+            { tier: 'other', label: 'Used', color: 'var(--text-dim)' },
           ] as const).map(({ tier, label, color }) => (
             <div key={tier} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)' }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
@@ -490,6 +490,17 @@ function ExamDetailDialog({ exam, onClose }: { exam: Exam; onClose: () => void }
                     style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.5, marginBottom: 4 }}
                     dangerouslySetInnerHTML={{ __html: q.body }}
                   />
+                  {q.imageUrl && (
+                    <img
+                      src={q.imageUrl}
+                      alt="Question image"
+                      style={{
+                        maxWidth: '100%', maxHeight: 240, borderRadius: 8,
+                        marginBottom: 8, objectFit: 'contain',
+                        background: 'var(--panel-2)',
+                      }}
+                    />
+                  )}
                   <div style={{ display: 'flex', gap: 6 }}>
                     <span style={{ fontSize: 11, color: DIFF_COLORS[q.difficulty] ?? 'var(--text-muted)' }}>{q.difficulty}</span>
                     <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>·</span>

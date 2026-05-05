@@ -27,6 +27,8 @@ export function ActiveExam({ exam, questions }: ActiveExamProps) {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
 
+  console.log('active exam')
+
   useEffect(() => {
     store.initExam(exam.id, questions, exam.durationMinutes * 60);
     timerRef.current = setInterval(() => store.tick(), 1000);
@@ -69,6 +71,7 @@ export function ActiveExam({ exam, questions }: ActiveExamProps) {
   }
 
   const q = questions[store.currentIndex];
+  console.log('question', q)
   if (!q) return null;
 
   const answered = Object.keys(store.answers).length;
@@ -106,9 +109,21 @@ export function ActiveExam({ exam, questions }: ActiveExamProps) {
           </div>
           <div
             className="rich-text-display"
-            style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', lineHeight: 1.6, marginBottom: 28 }}
+            style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', lineHeight: 1.6, marginBottom: q.imageUrl ? 16 : 28 }}
             dangerouslySetInnerHTML={{ __html: q.body }}
           />
+
+          {q.imageUrl && (
+            <img
+              src={q.imageUrl}
+              alt="Question image"
+              style={{
+                maxWidth: '100%', maxHeight: 320, borderRadius: 10,
+                marginBottom: 28, objectFit: 'contain',
+                background: 'var(--panel-2)',
+              }}
+            />
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {q.options.map((opt, i) => (
               <button

@@ -41,6 +41,7 @@ export async function getExamDetail(examId: string): Promise<ExamDetail> {
     gradeId: eq.question.gradeId,
     difficulty: eq.question.difficulty as Question['difficulty'],
     usesCount: eq.question.usesCount,
+    imageUrl: eq.question.imageUrl ?? undefined,
     subject: eq.question.subject ?? undefined,
     grade: eq.question.grade ?? undefined,
   }));

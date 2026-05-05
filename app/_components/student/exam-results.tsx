@@ -136,9 +136,20 @@ export function ExamResults({ result, backHref = '/dashboard' }: ExamResultsProp
                     {isCorrect ? 'CORRECT' : 'INCORRECT'}
                   </span>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 14, lineHeight: 1.5 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: q.imageUrl ? 12 : 14, lineHeight: 1.5 }}>
                   {q.body}
                 </div>
+                {q.imageUrl && (
+                  <img
+                    src={q.imageUrl}
+                    alt="Question image"
+                    style={{
+                      maxWidth: '100%', maxHeight: 280, borderRadius: 10,
+                      marginBottom: 14, objectFit: 'contain',
+                      background: 'var(--panel-2)',
+                    }}
+                  />
+                )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {q.options.map((opt, oi) => {
                     const isCorrectOpt = oi === q.correctIndex;

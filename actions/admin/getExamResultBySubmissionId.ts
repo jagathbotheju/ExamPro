@@ -25,6 +25,7 @@ export async function getExamResultBySubmissionId(submissionId: string): Promise
       body: r.question!.body,
       options: r.question!.options as string[],
       correctIndex: r.question!.correctIndex,
+      imageUrl: r.question!.imageUrl ?? undefined,
       subjectId: r.question!.subjectId,
       gradeId: r.question!.gradeId,
       difficulty: r.question!.difficulty as 'Easy' | 'Medium' | 'Hard',

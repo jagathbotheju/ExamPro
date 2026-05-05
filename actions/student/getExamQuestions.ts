@@ -41,6 +41,7 @@ export async function getExamQuestions(examId: string): Promise<{ exam: Exam; qu
       gradeId: r.question!.gradeId,
       difficulty: r.question!.difficulty as 'Easy' | 'Medium' | 'Hard',
       usesCount: r.question!.usesCount,
+      imageUrl: r.question!.imageUrl ?? undefined,
       subject: r.question!.subject ?? undefined,
       grade: r.question!.grade ?? undefined,
     }));
