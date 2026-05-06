@@ -136,9 +136,11 @@ export function ExamResults({ result, backHref = '/dashboard' }: ExamResultsProp
                     {isCorrect ? 'CORRECT' : 'INCORRECT'}
                   </span>
                 </div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: q.imageUrl ? 12 : 14, lineHeight: 1.5 }}>
-                  {q.body}
-                </div>
+                <div
+                  className="rich-text-display"
+                  style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: q.imageUrl ? 12 : 14, lineHeight: 1.5 }}
+                  dangerouslySetInnerHTML={{ __html: q.body }}
+                />
                 {q.imageUrl && (
                   <img
                     src={q.imageUrl}
