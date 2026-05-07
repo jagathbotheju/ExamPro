@@ -53,6 +53,7 @@ export function HomeTab({ profile }: HomeTabProps) {
   const yearOptions = availableYears.length > 0 ? availableYears : [currentYear];
   useEffect(() => {
     if (availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedYear(availableYears[availableYears.length - 1]);
     }
   }, [availableYears, selectedYear]);

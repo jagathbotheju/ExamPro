@@ -1,5 +1,6 @@
 'use client';
 
+import ReactPaginate from 'react-paginate';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PaginationProps {
@@ -11,23 +12,40 @@ interface PaginationProps {
 
 export function Pagination({ page, total, onPage, compact }: PaginationProps) {
   if (total <= 1) return null;
+
   return (
-    <div className="pagination" style={{ justifyContent: compact ? 'flex-start' : 'flex-end' }}>
-      <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
-        <ChevronLeft size={14} />
-      </button>
-      {Array.from({ length: total }, (_, i) => (
-        <button
-          key={i}
-          className={`btn btn-sm ${page === i + 1 ? 'btn-primary' : 'btn-ghost'}`}
-          onClick={() => onPage(i + 1)}
-        >
-          {i + 1}
-        </button>
-      ))}
-      <button className="btn btn-ghost btn-sm" disabled={page >= total} onClick={() => onPage(page + 1)}>
-        <ChevronRight size={14} />
-      </button>
+    <div style={{ justifyContent: compact ? 'flex-start' : 'flex-end' }} className="flex">
+      <ReactPaginate
+        pageCount={total}
+        forcePage={page - 1}
+        onPageChange={({ selected }) => onPage(selected + 1)}
+        marginPagesDisplayed={1}
+        pageRangeDisplayed={3}
+        previousLabel={
+          <span className="flex items-center gap-1">
+            <ChevronLeft size={13} />
+            previous
+          </span>
+        }
+        nextLabel={
+          <span className="flex items-center gap-1">
+            next
+            <ChevronRight size={13} />
+          </span>
+        }
+        breakLabel="..."
+        containerClassName="pagination"
+        pageClassName="pagination-item"
+        pageLinkClassName="pagination-link"
+        activeClassName="pagination-item--active"
+        previousClassName="pagination-item pagination-prev"
+        nextClassName="pagination-item pagination-next"
+        previousLinkClassName="pagination-link"
+        nextLinkClassName="pagination-link"
+        breakClassName="pagination-item pagination-break"
+        breakLinkClassName="pagination-link"
+        disabledClassName="pagination-disabled"
+      />
     </div>
   );
 }
