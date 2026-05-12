@@ -21,6 +21,7 @@ import { getSubjects } from '@/actions/admin/manageSubjectsGrades';
 import { queryKeys } from '@/app/_lib/query-keys';
 import { getGrade, getInitials, formatDate, formatTime } from '@/app/_lib/utils';
 import type { StudentSummary } from '@/app/_lib/types';
+import { GRADE_LABELS } from '@/app/_lib/types';
 
 const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -36,6 +37,8 @@ export function AdminHomeTab() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pPage, setPPage] = useState(1);
   const [cPage, setCPage] = useState(1);
+  const [cGradeFilter, setCGradeFilter] = useState('');
+  const [cSubjectFilter, setCSubjectFilter] = useState('');
   const [tf, setTf] = useState<'monthly' | 'yearly'>('monthly');
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
@@ -71,8 +74,8 @@ export function AdminHomeTab() {
   });
 
   const { data: completedData, isLoading: completedLoading } = useQuery({
-    queryKey: queryKeys.adminStudentCompletedExams(activeStudentId, cPage),
-    queryFn: () => getStudentCompletedExams(activeStudentId, cPage),
+    queryKey: queryKeys.adminStudentCompletedExams(activeStudentId, cPage, cGradeFilter, cSubjectFilter),
+    queryFn: () => getStudentCompletedExams(activeStudentId, cPage, cGradeFilter, cSubjectFilter),
     enabled: !!activeStudentId,
   });
 
@@ -112,7 +115,8 @@ export function AdminHomeTab() {
     setSelectedId(s.id);
     setPPage(1);
     setCPage(1);
-    // Reset chart filters when selecting a new student
+    setCGradeFilter('');
+    setCSubjectFilter('');
     setSelectedYear(currentYear);
     setSelectedMonth(currentMonth);
     setTf('monthly');
@@ -267,11 +271,23 @@ export function AdminHomeTab() {
 
           {/* Completed exams for student */}
           <div className="card">
-            <div className="card-title" style={{ marginBottom: 16 }}>
-              <FileText size={15} color="var(--green)" /> Completed Exams
-              {completedData && (
-                <span className="pill pill-soft" style={{ marginLeft: 6 }}>{completedData.total}</span>
-              )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+              <div className="card-title" style={{ margin: 0 }}>
+                <FileText size={15} color="var(--green)" /> Completed Exams
+                {completedData && (
+                  <span className="pill pill-soft" style={{ marginLeft: 6 }}>{completedData.total}</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <select className="select" value={cGradeFilter} onChange={e => { setCGradeFilter(e.target.value); setCPage(1); }}>
+                  <option value="">All Grades</option>
+                  {GRADE_LABELS.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+                <select className="select" value={cSubjectFilter} onChange={e => { setCSubjectFilter(e.target.value); setCPage(1); }}>
+                  <option value="">All Subjects</option>
+                  {subjects.map(s => <option key={s.slug} value={s.slug}>{s.name}</option>)}
+                </select>
+              </div>
             </div>
             {completedLoading ? (
               <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
