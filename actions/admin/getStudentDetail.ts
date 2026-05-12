@@ -60,6 +60,8 @@ export async function getStudentPendingExams(
 export async function getStudentCompletedExams(
   studentId: string,
   page = 1,
+  gradeFilter = '',
+  subjectFilter = '',
 ): Promise<{ submissions: ExamSubmission[]; total: number; pages: number }> {
   await assertAdmin();
 
@@ -69,9 +71,14 @@ export async function getStudentCompletedExams(
     orderBy: (es, { desc }) => [desc(es.submittedAt)],
   });
 
-  const total = rows.length;
+  const filtered = rows.filter(r =>
+    (!gradeFilter || r.exam?.grade?.label === gradeFilter) &&
+    (!subjectFilter || r.exam?.subject?.slug === subjectFilter),
+  );
+
+  const total = filtered.length;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const slice = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const slice = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const submissions: ExamSubmission[] = slice.map(r => ({
     id: r.id,

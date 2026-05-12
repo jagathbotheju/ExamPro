@@ -11,6 +11,7 @@ import { getPendingExams } from '@/actions/student/getPendingExams';
 import { getCompletedExams } from '@/actions/student/getCompletedExams';
 import { queryKeys } from '@/app/_lib/query-keys';
 import type { StudentProfile } from '@/app/_lib/types';
+import { GRADE_LABELS } from '@/app/_lib/types';
 
 const SUBJECTS = [
   { slug: 'math', name: 'Mathematics' }, { slug: 'science', name: 'Science' },
@@ -23,6 +24,7 @@ interface ExamsTabProps { profile: StudentProfile | null }
 
 export function ExamsTab({ profile }: ExamsTabProps) {
   const router = useRouter();
+  const [gradeFilter, setGradeFilter] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('');
   const [pendingPage, setPendingPage] = useState(1);
   const [completedPage, setCompletedPage] = useState(1);
@@ -36,12 +38,14 @@ export function ExamsTab({ profile }: ExamsTabProps) {
     queryFn: () => getCompletedExams(),
   });
 
-  const filteredPending = subjectFilter
-    ? allPending.filter(e => e.subject?.slug === subjectFilter || e.subjectId === subjectFilter)
-    : allPending;
-  const filteredCompleted = subjectFilter
-    ? allCompleted.filter(s => s.exam?.subject?.slug === subjectFilter)
-    : allCompleted;
+  const filteredPending = allPending.filter(e =>
+    (!subjectFilter || e.subject?.slug === subjectFilter) &&
+    (!gradeFilter || e.grade?.label === gradeFilter)
+  );
+  const filteredCompleted = allCompleted.filter(s =>
+    (!subjectFilter || s.exam?.subject?.slug === subjectFilter) &&
+    (!gradeFilter || s.exam?.grade?.label === gradeFilter)
+  );
 
   const pendingSlice = filteredPending.slice((pendingPage - 1) * PAGE, pendingPage * PAGE);
   const completedSlice = filteredCompleted.slice((completedPage - 1) * PAGE, completedPage * PAGE);
@@ -62,6 +66,10 @@ export function ExamsTab({ profile }: ExamsTabProps) {
       {/* Filters */}
       <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span className="label-tiny" style={{ marginRight: 4 }}>Filter by</span>
+        <select className="select" value={gradeFilter} onChange={e => { setGradeFilter(e.target.value); setPendingPage(1); setCompletedPage(1); }}>
+          <option value="">All Grades</option>
+          {GRADE_LABELS.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
         <select className="select" value={subjectFilter} onChange={e => { setSubjectFilter(e.target.value); setPendingPage(1); setCompletedPage(1); }}>
           <option value="">All Subjects</option>
           {SUBJECTS.map(s => <option key={s.slug} value={s.slug}>{s.name}</option>)}
